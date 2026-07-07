@@ -1,4 +1,4 @@
-#  동행 펀딩 (DongHaeng Funding)
+#  명랑회 (Myeongrang-hoe)
 
 > **사람이 모여야 시작되는 모임, AI가 성사시키는 대학생 크라우드펀딩 플랫폼**
 
