@@ -16,7 +16,10 @@ public record UserResponse(
         int sunlightScore,
         int noShowCount,
         int participationCount,
-        boolean loginable
+        boolean loginable,
+        Double lastLat,
+        Double lastLng,
+        long notificationsSeenAt
 ) {
     public static UserResponse from(UserAccount user) {
         return new UserResponse(
@@ -31,7 +34,10 @@ public record UserResponse(
                 user.getSunlightScore(),
                 user.getNoShowCount(),
                 user.getParticipationCount(),
-                user.isLoginable()
+                user.isLoginable(),
+                user.getLastLat(),
+                user.getLastLng(),
+                user.getNotificationsSeenAt()
         );
     }
 }

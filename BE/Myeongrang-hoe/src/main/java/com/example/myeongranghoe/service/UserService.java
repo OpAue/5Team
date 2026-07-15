@@ -113,6 +113,17 @@ public class UserService {
         if (patch.interests() != null) {
             user.setInterests(sanitizeInterests(patch.interests()));
         }
+        if (patch.notificationsSeenAt() != null) {
+            user.setNotificationsSeenAt(patch.notificationsSeenAt());
+        }
+        return UserResponse.from(userAccountRepository.save(user));
+    }
+
+    @Transactional
+    public UserResponse updateLocation(String email, double lat, double lng) {
+        UserAccount user = require(email);
+        user.setLastLat(lat);
+        user.setLastLng(lng);
         return UserResponse.from(userAccountRepository.save(user));
     }
 
@@ -157,6 +168,7 @@ public class UserService {
             String major,
             String age,
             String bio,
-            List<String> interests
+            List<String> interests,
+            Long notificationsSeenAt
     ) {}
 }

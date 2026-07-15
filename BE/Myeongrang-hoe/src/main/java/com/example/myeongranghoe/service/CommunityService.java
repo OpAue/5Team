@@ -145,6 +145,14 @@ public class CommunityService {
                 .toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> reviewsForFunding(Long fundingId) {
+        requireFunding(fundingId);
+        return reviewRepository.findByFundingIdOrderByCreatedAtDesc(fundingId).stream()
+                .map(this::reviewBody)
+                .toList();
+    }
+
     @Transactional
     public Map<String, Object> toggleWishlist(String email, Long fundingId) {
         requireFunding(fundingId);

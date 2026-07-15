@@ -15,6 +15,9 @@ export type ApiUser = {
   noShowCount: number
   participationCount: number
   loginable: boolean
+  lastLat?: number | null
+  lastLng?: number | null
+  notificationsSeenAt?: number
 }
 
 export type ApiFunding = {
@@ -41,6 +44,50 @@ export type ApiFunding = {
   matched: boolean
   createdAt: number
   distanceKm?: number | null
+}
+
+export type ApiChatMessage = {
+  id: number
+  fundingId: number
+  authorEmail: string
+  content: string
+  createdAt: number
+}
+
+export type ApiComment = {
+  id: number
+  fundingId: number
+  authorEmail: string
+  content: string
+  parentId?: number | null
+  createdAt: number
+}
+
+export type ApiReview = {
+  id: number
+  fundingId: number
+  writerEmail: string
+  targetEmail: string
+  noShow: boolean
+  checklist: string[]
+  content: string
+  createdAt: number
+}
+
+export type FundingInputBody = {
+  category: string
+  title: string
+  description: string
+  address: string
+  locationName: string
+  lat: number
+  lng: number
+  meetAt: string
+  meetTimeText: string
+  deadlineAt: string
+  deadlineText: string
+  targetCount: number
+  fee: number
 }
 
 export function getAccessToken(): string | null {
@@ -82,20 +129,32 @@ function authHeaders(extra?: HeadersInit): HeadersInit {
   }
 }
 
+async function request(
+  path: string,
+  init?: RequestInit & { auth?: boolean },
+): Promise<{ response: Response; payload: Record<string, unknown> | null }> {
+  const headers =
+    init?.auth === false
+      ? { 'Content-Type': 'application/json', ...(init.headers ?? {}) }
+      : authHeaders(init?.headers)
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...init, headers })
+  const payload = await parseJson(response)
+  return { response, payload }
+}
+
+// ---------- auth ----------
+
 export async function sendVerificationCode(email: string): Promise<{
   message: string
   code?: string
   delivered: boolean
 }> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/send-verification-code`, {
+  const { response, payload } = await request('/api/auth/send-verification-code', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    auth: false,
     body: JSON.stringify({ email }),
   })
-  const payload = await parseJson(response)
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, '인증번호 전송에 실패했어요.'))
-  }
+  if (!response.ok) throw new Error(errorMessage(payload, '인증번호 전송에 실패했어요.'))
   return {
     message: errorMessage(payload, '인증번호를 발송했어요.'),
     code: typeof payload?.code === 'string' ? payload.code : undefined,
@@ -104,12 +163,11 @@ export async function sendVerificationCode(email: string): Promise<{
 }
 
 export async function verifyEmailCode(email: string, code: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/verify-code`, {
+  const { response, payload } = await request('/api/auth/verify-code', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    auth: false,
     body: JSON.stringify({ email, code }),
   })
-  const payload = await parseJson(response)
   if (!response.ok || !payload?.verified) {
     throw new Error(errorMessage(payload, '인증번호가 올바르지 않아요.'))
   }
@@ -119,12 +177,11 @@ export async function loginWithApi(
   email: string,
   password: string,
 ): Promise<{ user: ApiUser; accessToken?: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+  const { response, payload } = await request('/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    auth: false,
     body: JSON.stringify({ email, password }),
   })
-  const payload = await parseJson(response)
   if (!response.ok || !payload?.user) {
     throw new Error(errorMessage(payload, '이메일 또는 비밀번호가 올바르지 않아요.'))
   }
@@ -143,12 +200,11 @@ export async function signupWithApi(input: {
   bio: string
   interests: string[]
 }): Promise<{ user: ApiUser; accessToken?: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/auth/signup`, {
+  const { response, payload } = await request('/api/auth/signup', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    auth: false,
     body: JSON.stringify(input),
   })
-  const payload = await parseJson(response)
   if (!response.ok || !payload?.user) {
     throw new Error(errorMessage(payload, '회원가입에 실패했어요.'))
   }
@@ -157,18 +213,56 @@ export async function signupWithApi(input: {
   return { user: payload.user as ApiUser, accessToken }
 }
 
-export async function fetchMailStatus(): Promise<{ smtpConfigured: boolean; mode: string; message: string }> {
-  const response = await fetch(`${API_BASE_URL}/api/mail/status`)
-  const payload = await parseJson(response)
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, '메일 상태를 확인할 수 없어요.'))
-  }
+// ---------- users ----------
+
+export async function fetchMe(): Promise<{ user: ApiUser; wishlist: number[] }> {
+  const { response, payload } = await request('/api/users/me')
+  if (!response.ok || !payload?.user) throw new Error(errorMessage(payload, '내 정보를 불러오지 못했어요.'))
   return {
-    smtpConfigured: Boolean(payload?.smtpConfigured),
-    mode: typeof payload?.mode === 'string' ? payload.mode : 'unknown',
-    message: errorMessage(payload, ''),
+    user: payload.user as ApiUser,
+    wishlist: Array.isArray(payload.wishlist) ? (payload.wishlist as number[]) : [],
   }
 }
+
+export async function updateProfileApi(body: {
+  name?: string
+  campus?: string
+  major?: string
+  age?: string
+  bio?: string
+  interests?: string[]
+  notificationsSeenAt?: number
+}): Promise<ApiUser> {
+  const { response, payload } = await request('/api/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+  if (!response.ok || !payload?.user) throw new Error(errorMessage(payload, '프로필 저장에 실패했어요.'))
+  return payload.user as ApiUser
+}
+
+export async function updateLocationApi(lat: number, lng: number): Promise<ApiUser> {
+  const { response, payload } = await request('/api/users/me/location', {
+    method: 'PATCH',
+    body: JSON.stringify({ lat, lng }),
+  })
+  if (!response.ok || !payload?.user) throw new Error(errorMessage(payload, '위치 저장에 실패했어요.'))
+  return payload.user as ApiUser
+}
+
+export async function fetchUserProfile(email: string): Promise<ApiUser> {
+  const { response, payload } = await request(`/api/users/profile?email=${encodeURIComponent(email)}`)
+  if (!response.ok || !payload?.user) throw new Error(errorMessage(payload, '사용자를 찾을 수 없어요.'))
+  return payload.user as ApiUser
+}
+
+export async function fetchUserReviews(email: string): Promise<ApiReview[]> {
+  const { response, payload } = await request(`/api/users/reviews?email=${encodeURIComponent(email)}`)
+  if (!response.ok) throw new Error(errorMessage(payload, '후기를 불러오지 못했어요.'))
+  return (payload?.reviews as ApiReview[]) ?? []
+}
+
+// ---------- fundings ----------
 
 export async function fetchFundings(params?: {
   lat?: number
@@ -180,51 +274,118 @@ export async function fetchFundings(params?: {
   if (params?.lng != null) qs.set('lng', String(params.lng))
   if (params?.radiusKm != null) qs.set('radiusKm', String(params.radiusKm))
   const query = qs.toString()
-  const response = await fetch(`${API_BASE_URL}/api/fundings${query ? `?${query}` : ''}`, {
-    headers: authHeaders(),
-  })
-  const payload = await parseJson(response)
-  if (!response.ok) {
-    throw new Error(errorMessage(payload, '펀딩 목록을 불러오지 못했어요.'))
-  }
+  const { response, payload } = await request(`/api/fundings${query ? `?${query}` : ''}`)
+  if (!response.ok) throw new Error(errorMessage(payload, '펀딩 목록을 불러오지 못했어요.'))
   return (payload?.fundings as ApiFunding[]) ?? []
 }
 
-export async function createFundingApi(input: {
-  category: string
-  title: string
-  description: string
-  address: string
-  locationName: string
-  lat: number
-  lng: number
-  meetAt: string
-  meetTimeText: string
-  deadlineAt: string
-  deadlineText: string
-  targetCount: number
-  fee: number
-}): Promise<ApiFunding> {
-  const response = await fetch(`${API_BASE_URL}/api/fundings`, {
+export async function fetchFunding(id: number): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${id}`)
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '펀딩을 찾을 수 없어요.'))
+  return payload.funding as ApiFunding
+}
+
+export async function createFundingApi(input: FundingInputBody): Promise<ApiFunding> {
+  const { response, payload } = await request('/api/fundings', {
     method: 'POST',
-    headers: authHeaders(),
     body: JSON.stringify(input),
   })
-  const payload = await parseJson(response)
-  if (!response.ok || !payload?.funding) {
-    throw new Error(errorMessage(payload, '펀딩 생성에 실패했어요.'))
-  }
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '펀딩 생성에 실패했어요.'))
+  return payload.funding as ApiFunding
+}
+
+export async function updateFundingApi(id: number, input: FundingInputBody): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '펀딩 수정에 실패했어요.'))
   return payload.funding as ApiFunding
 }
 
 export async function joinFundingApi(fundingId: number): Promise<ApiFunding> {
-  const response = await fetch(`${API_BASE_URL}/api/fundings/${fundingId}/join`, {
-    method: 'POST',
-    headers: authHeaders(),
-  })
-  const payload = await parseJson(response)
-  if (!response.ok || !payload?.funding) {
-    throw new Error(errorMessage(payload, '참여에 실패했어요.'))
-  }
+  const { response, payload } = await request(`/api/fundings/${fundingId}/join`, { method: 'POST' })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '참여에 실패했어요.'))
   return payload.funding as ApiFunding
+}
+
+export async function leaveFundingApi(fundingId: number): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/leave`, { method: 'POST' })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '참여 취소에 실패했어요.'))
+  return payload.funding as ApiFunding
+}
+
+export async function confirmFundingApi(fundingId: number): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/confirm`, { method: 'POST' })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '모집 확정에 실패했어요.'))
+  return payload.funding as ApiFunding
+}
+
+export async function fetchNudge(fundingId: number): Promise<string> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/nudge`)
+  if (!response.ok) throw new Error(errorMessage(payload, '넛지 메시지를 불러오지 못했어요.'))
+  return typeof payload?.message === 'string' ? payload.message : ''
+}
+
+export async function fetchChat(fundingId: number): Promise<ApiChatMessage[]> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/chat`)
+  if (!response.ok) throw new Error(errorMessage(payload, '채팅을 불러오지 못했어요.'))
+  return (payload?.messages as ApiChatMessage[]) ?? []
+}
+
+export async function sendChatApi(fundingId: number, content: string): Promise<ApiChatMessage> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  })
+  if (!response.ok || !payload?.message) throw new Error(errorMessage(payload, '메시지 전송에 실패했어요.'))
+  return payload.message as ApiChatMessage
+}
+
+export async function fetchComments(fundingId: number): Promise<ApiComment[]> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/comments`)
+  if (!response.ok) throw new Error(errorMessage(payload, '댓글을 불러오지 못했어요.'))
+  return (payload?.comments as ApiComment[]) ?? []
+}
+
+export async function addCommentApi(
+  fundingId: number,
+  content: string,
+  parentId?: number,
+): Promise<ApiComment> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ content, parentId }),
+  })
+  if (!response.ok || !payload?.comment) throw new Error(errorMessage(payload, '댓글 작성에 실패했어요.'))
+  return payload.comment as ApiComment
+}
+
+export async function fetchFundingReviews(fundingId: number): Promise<ApiReview[]> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/reviews`)
+  if (!response.ok) throw new Error(errorMessage(payload, '후기를 불러오지 못했어요.'))
+  return (payload?.reviews as ApiReview[]) ?? []
+}
+
+export async function submitReviewApi(
+  fundingId: number,
+  body: { targetEmail: string; checklist: string[]; content: string; noShow?: boolean },
+): Promise<ApiReview> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!response.ok || !payload?.review) throw new Error(errorMessage(payload, '후기 저장에 실패했어요.'))
+  return payload.review as ApiReview
+}
+
+export async function toggleWishlistApi(
+  fundingId: number,
+): Promise<{ wishlisted: boolean; fundingId: number }> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/wishlist`, { method: 'POST' })
+  if (!response.ok) throw new Error(errorMessage(payload, '찜 처리에 실패했어요.'))
+  return {
+    wishlisted: Boolean(payload?.wishlisted),
+    fundingId: Number(payload?.fundingId ?? fundingId),
+  }
 }

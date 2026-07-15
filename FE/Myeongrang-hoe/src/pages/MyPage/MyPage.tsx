@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import BottomNav from '../../components/BottomNav'
 import GigCard from '../../components/GigCard'
@@ -17,6 +17,8 @@ import {
   logout,
   participantNamesOf,
   reviewsReceivedBy,
+  syncMeFromServer,
+  syncUserReviewsFromServer,
   wishlistOf,
 } from '../../store/actions'
 import { sunlightTier } from '../../lib/sunlight'
@@ -35,6 +37,13 @@ export default function MyPage() {
   useDB()
   const me = getCurrentUser()
   const [tab, setTab] = useState<Tab>('review')
+
+  useEffect(() => {
+    void syncMeFromServer().then(() => {
+      const email = getCurrentUser()?.email
+      if (email) void syncUserReviewsFromServer(email)
+    })
+  }, [])
 
   function handleLogout() {
     logout()

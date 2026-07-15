@@ -64,6 +64,16 @@ public class UserAccount {
     @Column(nullable = false)
     private boolean loginable = true;
 
+    @Column(name = "last_lat")
+    private Double lastLat;
+
+    @Column(name = "last_lng")
+    private Double lastLng;
+
+    /** 기존 H2 테이블에 NOT NULL 추가 시 마이그레이션 실패 방지 — null 이면 0 취급 */
+    @Column(name = "notifications_seen_at")
+    private Long notificationsSeenAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -180,6 +190,30 @@ public class UserAccount {
 
     public void setLoginable(boolean loginable) {
         this.loginable = loginable;
+    }
+
+    public Double getLastLat() {
+        return lastLat;
+    }
+
+    public void setLastLat(Double lastLat) {
+        this.lastLat = lastLat;
+    }
+
+    public Double getLastLng() {
+        return lastLng;
+    }
+
+    public void setLastLng(Double lastLng) {
+        this.lastLng = lastLng;
+    }
+
+    public long getNotificationsSeenAt() {
+        return notificationsSeenAt == null ? 0L : notificationsSeenAt;
+    }
+
+    public void setNotificationsSeenAt(long notificationsSeenAt) {
+        this.notificationsSeenAt = notificationsSeenAt;
     }
 
     public Instant getCreatedAt() {

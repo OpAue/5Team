@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Map, MapMarker } from 'react-kakao-maps-sdk'
 import HostDetailSheet from '../../components/HostDetailSheet'
@@ -18,6 +18,7 @@ import {
   isParticipant,
   isWishlisted,
   joinFunding,
+  syncFundingDetail,
   toggleWishlist,
 } from '../../store/actions'
 import { useKakao } from '../../lib/kakao'
@@ -55,6 +56,13 @@ export default function FundingTab() {
 
   const [showHostDetail, setShowHostDetail] = useState(false)
   const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    const numId = Number(id)
+    if (Number.isFinite(numId) && numId > 0) {
+      void syncFundingDetail(numId)
+    }
+  }, [id])
 
   function handleAddComment() {
     const content = draft.trim()

@@ -16,6 +16,7 @@ import {
   isExpired,
   participantNamesOf,
   syncFundingsFromServer,
+  syncMeFromServer,
   updateLastLocation,
 } from '../../store/actions'
 import { distanceKm, type LatLng } from '../../lib/geo'
@@ -38,6 +39,10 @@ export default function Home() {
     setLocating(true)
     setRefreshTick((n) => n + 1)
   }
+
+  useEffect(() => {
+    void syncMeFromServer()
+  }, [])
 
   useEffect(() => {
     void syncFundingsFromServer(

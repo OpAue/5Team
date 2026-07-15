@@ -1,8 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BackButton from '../../components/BackButton'
 import { useDB } from '../../store/db'
-import { chatMessagesOf, currentCountOf, getCurrentUser, getFunding, getUser, sendChatMessage } from '../../store/actions'
+import {
+  chatMessagesOf,
+  currentCountOf,
+  getCurrentUser,
+  getFunding,
+  getUser,
+  sendChatMessage,
+  syncChatFromServer,
+  syncFundingDetail,
+} from '../../store/actions'
 
 export default function ChatRoom() {
   const navigate = useNavigate()
@@ -12,6 +21,17 @@ export default function ChatRoom() {
   const me = getCurrentUser()
   const messages = chatMessagesOf(funding.id)
   const [draft, setDraft] = useState('')
+
+  useEffect(() => {
+    const numId = Number(id)
+    if (Number.isFinite(numId) && numId > 0) {
+      void syncFundingDetail(numId)
+      const timer = window.setInterval(() => {
+        void syncChatFromServer(numId)
+      }, 4000)
+      return () => window.clearInterval(timer)
+    }
+  }, [id])
 
   function handleSend() {
     const text = draft.trim()

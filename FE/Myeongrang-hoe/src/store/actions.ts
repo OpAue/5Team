@@ -1,4 +1,27 @@
-import { createFundingApi, fetchFundings, getAccessToken, joinFundingApi, type ApiFunding } from '../lib/api'
+import {
+  addCommentApi,
+  confirmFundingApi,
+  createFundingApi,
+  fetchChat,
+  fetchComments,
+  fetchFunding,
+  fetchFundings,
+  fetchFundingReviews,
+  fetchMe,
+  fetchUserProfile,
+  fetchUserReviews,
+  getAccessToken,
+  joinFundingApi,
+  leaveFundingApi,
+  sendChatApi,
+  submitReviewApi,
+  toggleWishlistApi,
+  updateFundingApi,
+  updateLocationApi,
+  updateProfileApi,
+  type ApiFunding,
+  type ApiUser,
+} from '../lib/api'
 import { getDB, mutate } from './db'
 import { CHECKLIST_ITEMS, type FundingRecord, type RiskLevel, type UserRecord } from './schema'
 
@@ -103,7 +126,7 @@ export function loginWithPassword(email: string, password: string): boolean {
 
 /** Mirror a backend user into local store so existing screens keep working. */
 export function applyServerUser(
-  user: {
+  user: ApiUser | {
     email: string
     name: string
     campus: UserRecord['campus'] | string
@@ -115,6 +138,9 @@ export function applyServerUser(
     noShowCount?: number
     participationCount?: number
     loginable?: boolean
+    lastLat?: number | null
+    lastLng?: number | null
+    notificationsSeenAt?: number
   },
   options?: { password?: string; setCurrent?: boolean },
 ) {
@@ -136,14 +162,39 @@ export function applyServerUser(
       noShowCount: user.noShowCount ?? existing?.noShowCount ?? 0,
       participationCount: user.participationCount ?? existing?.participationCount ?? 0,
       loginable: user.loginable ?? existing?.loginable ?? true,
-      notificationsSeenAt: existing?.notificationsSeenAt ?? 0,
-      lastLat: existing?.lastLat,
-      lastLng: existing?.lastLng,
+      notificationsSeenAt: user.notificationsSeenAt ?? existing?.notificationsSeenAt ?? 0,
+      lastLat: user.lastLat ?? existing?.lastLat,
+      lastLng: user.lastLng ?? existing?.lastLng,
     }
     if (options?.setCurrent !== false) {
       d.currentUserEmail = user.email
     }
   })
+}
+
+/** 로그인 직후 / 홈 진입 시 내 정보·찜 동기화 */
+export async function syncMeFromServer() {
+  if (!getAccessToken()) return false
+  try {
+    const { user, wishlist } = await fetchMe()
+    applyServerUser(user, { setCurrent: true })
+    mutate((d) => {
+      d.wishlist[user.email] = wishlist
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function ensureUserCached(email: string) {
+  if (!email || getDB().users[email]) return
+  try {
+    const user = await fetchUserProfile(email)
+    applyServerUser(user, { setCurrent: false })
+  } catch {
+    // ignore
+  }
 }
 
 export function loginAsTestAccount(email: string) {
@@ -156,6 +207,11 @@ export function logout() {
   mutate((d) => {
     d.currentUserEmail = null
   })
+  try {
+    localStorage.removeItem('mh_access_token')
+  } catch {
+    // ignore
+  }
 }
 
 export function isEmailTaken(email: string): boolean {
@@ -201,6 +257,9 @@ export function updateProfile(
     if (!user) return
     Object.assign(user, patch)
   })
+  if (getAccessToken()) {
+    void updateProfileApi(patch).then((user) => applyServerUser(user, { setCurrent: false }))
+  }
 }
 
 export function updateLastLocation(email: string, lat: number, lng: number) {
@@ -210,14 +269,23 @@ export function updateLastLocation(email: string, lat: number, lng: number) {
     user.lastLat = lat
     user.lastLng = lng
   })
+  if (getAccessToken()) {
+    void updateLocationApi(lat, lng).then((user) => applyServerUser(user, { setCurrent: false }))
+  }
 }
 
 export function markNotificationsSeen(email: string) {
+  const seenAt = Date.now()
   mutate((d) => {
     const user = d.users[email]
     if (!user) return
-    user.notificationsSeenAt = Date.now()
+    user.notificationsSeenAt = seenAt
   })
+  if (getAccessToken()) {
+    void updateProfileApi({ notificationsSeenAt: seenAt }).then((user) =>
+      applyServerUser(user, { setCurrent: false }),
+    )
+  }
 }
 
 // ---------- fundings ----------
@@ -265,6 +333,121 @@ export async function syncFundingsFromServer(params?: { lat?: number; lng?: numb
       d.fundings = list.map(mapApiFunding)
       d.nextFundingId = list.reduce((m, f) => Math.max(m, f.id + 1), 1)
     })
+    // 참여자 이름 캐시
+    const emails = new Set<string>()
+    list.forEach((f) => f.participants?.forEach((e) => emails.add(e)))
+    await Promise.all([...emails].map((e) => ensureUserCached(e)))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function syncFundingDetail(fundingId: number) {
+  try {
+    const api = await fetchFunding(fundingId)
+    upsertLocalFunding(mapApiFunding(api))
+    await Promise.all([
+      syncCommentsFromServer(fundingId),
+      syncChatFromServer(fundingId),
+      syncReviewsFromServer(fundingId),
+      ...api.participants.map((e) => ensureUserCached(e)),
+    ])
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function syncCommentsFromServer(fundingId: number) {
+  try {
+    const comments = await fetchComments(fundingId)
+    mutate((d) => {
+      d.comments = d.comments.filter((c) => c.fundingId !== fundingId)
+      for (const c of comments) {
+        d.comments.push({
+          id: c.id,
+          fundingId: c.fundingId,
+          authorEmail: c.authorEmail,
+          content: c.content,
+          parentId: c.parentId ?? undefined,
+          createdAt: c.createdAt,
+        })
+        d.nextCommentId = Math.max(d.nextCommentId, c.id + 1)
+      }
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function syncChatFromServer(fundingId: number) {
+  try {
+    const messages = await fetchChat(fundingId)
+    mutate((d) => {
+      d.chatMessages = d.chatMessages.filter((m) => m.fundingId !== fundingId)
+      for (const m of messages) {
+        d.chatMessages.push({
+          id: m.id,
+          fundingId: m.fundingId,
+          authorEmail: m.authorEmail,
+          content: m.content,
+          createdAt: m.createdAt,
+        })
+        d.nextChatId = Math.max(d.nextChatId, m.id + 1)
+      }
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function syncReviewsFromServer(fundingId: number) {
+  try {
+    const reviews = await fetchFundingReviews(fundingId)
+    mutate((d) => {
+      d.reviews = d.reviews.filter((r) => r.fundingId !== fundingId)
+      for (const r of reviews) {
+        d.reviews.push({
+          id: r.id,
+          fundingId: r.fundingId,
+          writerEmail: r.writerEmail,
+          targetEmail: r.targetEmail,
+          noShow: r.noShow,
+          checklist: r.checklist ?? [],
+          content: r.content ?? '',
+          createdAt: r.createdAt,
+        })
+        d.nextReviewId = Math.max(d.nextReviewId, r.id + 1)
+      }
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function syncUserReviewsFromServer(email: string) {
+  try {
+    const reviews = await fetchUserReviews(email)
+    mutate((d) => {
+      // merge by id
+      const others = d.reviews.filter((r) => r.targetEmail !== email)
+      const mapped = reviews.map((r) => ({
+        id: r.id,
+        fundingId: r.fundingId,
+        writerEmail: r.writerEmail,
+        targetEmail: r.targetEmail,
+        noShow: r.noShow,
+        checklist: r.checklist ?? [],
+        content: r.content ?? '',
+        createdAt: r.createdAt,
+      }))
+      d.reviews = [...others, ...mapped]
+      d.nextReviewId = d.reviews.reduce((m, r) => Math.max(m, r.id + 1), d.nextReviewId)
+    })
     return true
   } catch {
     return false
@@ -302,6 +485,11 @@ export function leaveFunding(fundingId: number, email: string) {
     if (!f || f.hostEmail === email) return
     f.participants = f.participants.filter((e) => e !== email)
   })
+  if (getAccessToken()) {
+    void leaveFundingApi(fundingId)
+      .then((api) => upsertLocalFunding(mapApiFunding(api)))
+      .catch(() => {})
+  }
 }
 
 interface FundingInput {
@@ -404,6 +592,11 @@ export function updateFunding(fundingId: number, input: FundingInput) {
     f.targetCount = Math.max(input.targetCount, minTarget)
     f.fee = input.fee
   })
+  if (getAccessToken()) {
+    void updateFundingApi(fundingId, input)
+      .then((api) => upsertLocalFunding(mapApiFunding(api)))
+      .catch(() => {})
+  }
 }
 
 /** 목표 인원이 다 안 찼어도 호스트가 현재 인원으로 모집을 확정한다 (혼자일 때는 불가) */
@@ -415,6 +608,11 @@ export function confirmFunding(fundingId: number) {
     if (current < 2) return
     f.targetCount = current
   })
+  if (getAccessToken()) {
+    void confirmFundingApi(fundingId)
+      .then((api) => upsertLocalFunding(mapApiFunding(api)))
+      .catch(() => {})
+  }
 }
 
 export function addComment(fundingId: number, email: string, content: string, parentId?: number) {
@@ -428,6 +626,11 @@ export function addComment(fundingId: number, email: string, content: string, pa
       createdAt: Date.now(),
     })
   })
+  if (getAccessToken()) {
+    void addCommentApi(fundingId, content, parentId)
+      .then(() => syncCommentsFromServer(fundingId))
+      .catch(() => {})
+  }
 }
 
 export function sendChatMessage(fundingId: number, email: string, content: string) {
@@ -440,6 +643,11 @@ export function sendChatMessage(fundingId: number, email: string, content: strin
       createdAt: Date.now(),
     })
   })
+  if (getAccessToken()) {
+    void sendChatApi(fundingId, content)
+      .then(() => syncChatFromServer(fundingId))
+      .catch(() => {})
+  }
 }
 
 export function submitReview(
@@ -471,6 +679,11 @@ export function submitReview(
       target.sunlightScore = Math.max(0, Math.min(100, target.sunlightScore + (positive ? 4 : 0)))
     }
   })
+  if (getAccessToken()) {
+    void submitReviewApi(fundingId, { targetEmail, checklist, content, noShow })
+      .then(() => Promise.all([syncReviewsFromServer(fundingId), ensureUserCached(targetEmail)]))
+      .catch(() => {})
+  }
 }
 
 export function toggleWishlist(email: string, fundingId: number) {
@@ -480,4 +693,18 @@ export function toggleWishlist(email: string, fundingId: number) {
       ? list.filter((id) => id !== fundingId)
       : [...list, fundingId]
   })
+  if (getAccessToken()) {
+    void toggleWishlistApi(fundingId)
+      .then((res) => {
+        mutate((d) => {
+          const list = d.wishlist[email] ?? []
+          d.wishlist[email] = res.wishlisted
+            ? list.includes(fundingId)
+              ? list
+              : [...list, fundingId]
+            : list.filter((id) => id !== fundingId)
+        })
+      })
+      .catch(() => {})
+  }
 }

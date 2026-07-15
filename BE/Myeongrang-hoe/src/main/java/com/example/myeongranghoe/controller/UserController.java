@@ -7,9 +7,9 @@ import com.example.myeongranghoe.service.UserService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -46,13 +46,31 @@ public class UserController {
                 body.major(),
                 body.age(),
                 body.bio(),
-                body.interests()
+                body.interests(),
+                body.notificationsSeenAt()
         ));
         return ResponseEntity.ok(Map.of("success", true, "message", "프로필이 저장되었어요.", "user", user));
     }
 
-    @GetMapping("/{email}/reviews")
-    public ResponseEntity<Map<String, Object>> reviews(@PathVariable String email) {
+    @PatchMapping("/me/location")
+    public ResponseEntity<Map<String, Object>> updateLocation(@RequestBody LocationBody body) {
+        String email = UserContext.require();
+        if (body.lat() == null || body.lng() == null) {
+            throw new IllegalArgumentException("위도·경도가 필요해요.");
+        }
+        UserResponse user = userService.updateLocation(email, body.lat(), body.lng());
+        return ResponseEntity.ok(Map.of("success", true, "user", user));
+    }
+
+    /** 공개 프로필 (참여자 이름 표시용). 이메일 쿼리로 조회. */
+    @GetMapping("/profile")
+    public ResponseEntity<Map<String, Object>> profile(@RequestParam String email) {
+        UserResponse user = userService.getByEmail(email);
+        return ResponseEntity.ok(Map.of("success", true, "user", user));
+    }
+
+    @GetMapping("/reviews")
+    public ResponseEntity<Map<String, Object>> reviews(@RequestParam String email) {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "reviews", communityService.reviewsForUser(email)
@@ -65,6 +83,9 @@ public class UserController {
             String major,
             String age,
             String bio,
-            List<String> interests
+            List<String> interests,
+            Long notificationsSeenAt
     ) {}
+
+    public record LocationBody(Double lat, Double lng) {}
 }

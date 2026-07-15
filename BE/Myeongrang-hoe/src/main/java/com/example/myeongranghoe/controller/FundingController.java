@@ -139,6 +139,14 @@ public class FundingController {
         ));
     }
 
+    @GetMapping("/{id}/reviews")
+    public ResponseEntity<Map<String, Object>> listReviews(@PathVariable Long id) {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "reviews", communityService.reviewsForFunding(id)
+        ));
+    }
+
     @PostMapping("/{id}/reviews")
     public ResponseEntity<Map<String, Object>> review(
             @PathVariable Long id,
