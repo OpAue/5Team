@@ -1,0 +1,16 @@
+:root {
+  --canvas: #ffffff;
+  --primary-tint: #dce6f5;
+  --primary-deep: #5d90d8;
+  --heading: #212224;
+  --label: #303441;
+  --border: #c8cad2;
+  --border-card: #e4e5ed;
+  --hairline: #f2f3f7;
+  --red: #ff402b;
+  --blue-tint: #ebf4ff;
+  --blue-deep: #116ad4;
+  --primary: #72abfa;
+  --on-primary: #212224;
+  --ink: #000000;
+}
