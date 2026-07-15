@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "myeongrang-hoe-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "FE/Myeongrang-hoe", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}

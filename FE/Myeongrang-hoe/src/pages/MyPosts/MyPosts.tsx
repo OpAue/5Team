@@ -1,75 +1,84 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import BottomNav from '../../components/BottomNav'
 import PageHeader from '../../components/PageHeader'
 import fabWrite from '../../assets/myposts/fab-write.svg'
-
-const posts = [
-  {
-    id: 1,
-    status: '모집중',
-    statusStyle: 'bg-[var(--primary-tint)] text-[var(--primary-deep)]',
-    title: '미당 순대국 벙개',
-    meta: '정문 앞 미당순대국 · 오늘 19:00',
-    progress: 75,
-    foot: '3/4명 참여',
-  },
-  {
-    id: 2,
-    status: '모집중',
-    statusStyle: 'bg-[var(--primary-tint)] text-[var(--primary-deep)]',
-    title: '전공 교류 스터디 모임',
-    meta: '인문캠퍼스 도서관 · 7/18(토) 14:00',
-    progress: 50,
-    foot: '10/20명 참여',
-  },
-  {
-    id: 3,
-    status: '펀딩 성공',
-    statusStyle: 'bg-[var(--blue-tint)] text-[var(--blue-deep)]',
-    title: '인문 x 자연 보드게임 밤',
-    meta: '본관 학생라운지 · 7/14(화) 19:00 · 종료',
-    progress: 100,
-    foot: '20/20명 · 채팅방 개설됨',
-  },
-]
+import { useDB } from '../../store/db'
+import { currentCountOf, getCurrentUser, hostedBy, isMatched } from '../../store/actions'
 
 export default function MyPosts() {
+  useDB()
+  const navigate = useNavigate()
+  const me = getCurrentUser()
+  const posts = me ? hostedBy(me.email) : []
+
   return (
-    <div className="relative flex min-h-screen flex-col bg-white">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-white">
       <PageHeader title="내가 쓴 글" />
 
       <main className="relative flex-1 overflow-y-auto">
         <div className="flex flex-col gap-[12px] px-[16px] pt-[16px] pb-[24px]">
           <p className="text-[20px] font-bold text-[var(--heading)]">내가 만든 펀딩</p>
-          {posts.map((p) => (
-            <div
-              key={p.id}
-              className="flex w-full gap-[12px] rounded-[4px] border border-[var(--border-card)] p-[12px] shadow-[0px_4px_6px_rgba(0,0,0,0.08)]"
-            >
+
+          {posts.length === 0 && (
+            <p className="py-[24px] text-center text-[14px] text-[var(--border)]">
+              아직 만든 펀딩이 없어요
+            </p>
+          )}
+
+          {posts.map((p) => {
+            const current = currentCountOf(p)
+            const matched = isMatched(p)
+            return (
               <div
-                className="size-[76px] shrink-0 rounded-[4px]"
-                style={{
-                  backgroundImage: 'linear-gradient(135deg, #2777e7 0%, #5d90d8 71.4%)',
-                }}
-              />
-              <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-                <span
-                  className={`w-fit rounded-[11px] px-[8px] py-[3px] text-[11px] font-bold ${p.statusStyle}`}
-                >
-                  {p.status}
-                </span>
-                <p className="truncate text-[16px] font-bold text-[var(--heading)]">{p.title}</p>
-                <p className="truncate text-[13px] text-[var(--label)]">{p.meta}</p>
-                <div className="h-[6px] w-full overflow-hidden rounded-full bg-[var(--hairline)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--primary-deep)]"
-                    style={{ width: `${p.progress}%` }}
-                  />
+                key={p.id}
+                role="link"
+                tabIndex={0}
+                onClick={() => navigate(`/funding/${p.id}`)}
+                onKeyDown={(e) => e.key === 'Enter' && navigate(`/funding/${p.id}`)}
+                className="flex w-full cursor-pointer gap-[12px] rounded-[4px] border border-[var(--border-card)] p-[12px] shadow-[0px_4px_6px_rgba(0,0,0,0.08)]"
+              >
+                <div
+                  className="size-[76px] shrink-0 rounded-[4px]"
+                  style={{
+                    backgroundImage: 'linear-gradient(135deg, #2777e7 0%, #5d90d8 71.4%)',
+                  }}
+                />
+                <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
+                  <span
+                    className={`w-fit rounded-[11px] px-[8px] py-[3px] text-[11px] font-bold ${
+                      matched
+                        ? 'bg-[var(--blue-tint)] text-[var(--blue-deep)]'
+                        : 'bg-[var(--primary-tint)] text-[var(--primary-deep)]'
+                    }`}
+                  >
+                    {matched ? '펀딩 성공' : '모집중'}
+                  </span>
+                  <p className="truncate text-[16px] font-bold text-[var(--heading)]">{p.title}</p>
+                  <p className="truncate text-[13px] text-[var(--label)]">
+                    {p.address} · {p.meetTimeText}
+                  </p>
+                  <div className="h-[6px] w-full overflow-hidden rounded-full bg-[var(--hairline)]">
+                    <div
+                      className="h-full rounded-full bg-[var(--primary-deep)]"
+                      style={{ width: `${Math.round((current / p.targetCount) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[12px] font-bold text-[var(--label)]">
+                    {current}/{p.targetCount}명 {matched && '· 채팅방 개설됨'}
+                  </p>
+                  {matched && (
+                    <Link
+                      to={`/review/new/${p.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-[4px] w-fit rounded-[4px] border border-[var(--primary-deep)] px-[10px] py-[5px] text-[11px] font-bold text-[var(--primary-deep)]"
+                    >
+                      후기 작성하기
+                    </Link>
+                  )}
                 </div>
-                <p className="text-[12px] font-bold text-[var(--label)]">{p.foot}</p>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         <Link

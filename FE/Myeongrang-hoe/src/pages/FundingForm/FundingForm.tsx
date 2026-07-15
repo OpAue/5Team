@@ -1,16 +1,175 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import LocationSearch, { type SelectedPlace } from '../../components/LocationSearch'
+import { createFunding, getCurrentUser, getFunding, isHost, updateFunding } from '../../store/actions'
 
 const categories = ['맛집', '교류', '산책', '스터디', '스포츠', '봉사']
 
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+function todayDateInput(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function nowDatetimeLocalInput(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function isoToDateInput(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function isoToTimeInput(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function isoToDatetimeLocalInput(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function computeMeetAt(dateStr: string, timeStr: string): string {
+  if (!dateStr && !timeStr) return ''
+  const baseDate = dateStr || todayDateInput()
+  const t = timeStr || '00:00'
+  return new Date(`${baseDate}T${t}`).toISOString()
+}
+
+function formatMeetText(dateStr: string, timeStr: string): string {
+  if (!dateStr) return timeStr ? `오늘 ${timeStr}` : '시간 미정'
+  const d = new Date(`${dateStr}T${timeStr || '00:00'}`)
+  const isToday = d.toDateString() === new Date().toDateString()
+  const week = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()]
+  const datePart = isToday ? '오늘' : `${d.getMonth() + 1}/${d.getDate()}(${week})`
+  return timeStr ? `${datePart} ${timeStr}` : datePart
+}
+
+function formatDeadlineText(deadline: string): string {
+  if (!deadline) return '미정'
+  const [dateStr, timeStr] = deadline.split('T')
+  return formatMeetText(dateStr, timeStr)
+}
+
+function computeScheduleError(dateStr: string, timeStr: string, deadlineStr: string): string {
+  let meetAt = ''
+
+  if (dateStr && !timeStr) {
+    // 시간을 아직 안 골랐으면 자정(00:00) 기준으로 비교하지 않고 "날짜"만 지났는지 본다.
+    // (그렇지 않으면 오늘 날짜를 골라도 이미 자정은 지났으니 항상 에러가 뜨는 버그가 생긴다)
+    const chosenDateStart = new Date(`${dateStr}T00:00`).getTime()
+    const todayStart = new Date(`${todayDateInput()}T00:00`).getTime()
+    if (chosenDateStart < todayStart) {
+      return '이미 지난 날짜는 선택할 수 없어요'
+    }
+  } else if (dateStr || timeStr) {
+    meetAt = computeMeetAt(dateStr, timeStr)
+    if (new Date(meetAt).getTime() < Date.now() - 60000) {
+      return '이미 지난 시간은 선택할 수 없어요'
+    }
+  }
+
+  if (deadlineStr) {
+    if (new Date(deadlineStr).getTime() < Date.now() - 60000) {
+      return '이미 지난 마감 시간은 선택할 수 없어요'
+    }
+    if (meetAt && new Date(deadlineStr).getTime() > new Date(meetAt).getTime()) {
+      return '모집 마감은 만나는 시간보다 늦을 수 없어요'
+    }
+  }
+
+  return ''
+}
+
 export default function FundingForm() {
   const navigate = useNavigate()
-  const [title, setTitle] = useState('')
-  const [category, setCategory] = useState(categories[0])
-  const [location, setLocation] = useState('')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
-  const [headcount, setHeadcount] = useState(4)
+  const { id } = useParams()
+  const me = getCurrentUser()
+  const editing = !!id
+  const existing = editing ? getFunding(id) : null
+  const forbidden = editing && !!me && !!existing && !isHost(existing, me.email)
+
+  useEffect(() => {
+    if (forbidden && existing) {
+      navigate(`/funding/${existing.id}`, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forbidden])
+
+  const [title, setTitle] = useState(existing?.title ?? '')
+  const [content, setContent] = useState(existing?.description ?? '')
+  const [category, setCategory] = useState(existing?.category ?? categories[0])
+  const [place, setPlace] = useState<SelectedPlace | null>(
+    existing
+      ? { name: existing.locationName, address: existing.address, lat: existing.lat, lng: existing.lng }
+      : null,
+  )
+  const [date, setDate] = useState(existing ? isoToDateInput(existing.meetAt) : '')
+  const [time, setTime] = useState(existing ? isoToTimeInput(existing.meetAt) : '')
+  const [headcount, setHeadcount] = useState(existing?.targetCount ?? 4)
+  const [deadline, setDeadline] = useState(existing ? isoToDatetimeLocalInput(existing.deadlineAt) : '')
+  const [fee, setFee] = useState(existing?.fee ?? 0)
+
+  const minHeadcount = existing ? Math.max(2, existing.participants.length) : 2
+
+  const [error, setError] = useState('')
+
+  const canSubmit = !!me && title.trim().length > 0 && !!place?.name && !error
+
+  function handleDateChange(nextDate: string) {
+    setDate(nextDate)
+    setError(computeScheduleError(nextDate, time, deadline))
+  }
+
+  function handleTimeChange(nextTime: string) {
+    setTime(nextTime)
+    setError(computeScheduleError(date, nextTime, deadline))
+  }
+
+  function handleDeadlineChange(nextDeadline: string) {
+    setDeadline(nextDeadline)
+    setError(computeScheduleError(date, time, nextDeadline))
+  }
+
+  function handleSubmit() {
+    if (!me || !canSubmit || !place) return
+    const scheduleError = computeScheduleError(date, time, deadline)
+    if (scheduleError) {
+      setError(scheduleError)
+      return
+    }
+    const input = {
+      category,
+      title: title.trim(),
+      description: content.trim() || '자세한 소개는 준비 중이에요.',
+      address: place.address,
+      locationName: place.name,
+      lat: place.lat,
+      lng: place.lng,
+      meetAt: computeMeetAt(date, time),
+      meetTimeText: formatMeetText(date, time),
+      deadlineAt: deadline ? new Date(deadline).toISOString() : '',
+      deadlineText: formatDeadlineText(deadline),
+      targetCount: headcount,
+      fee,
+    }
+
+    if (editing && existing) {
+      updateFunding(existing.id, input)
+      navigate(`/funding/${existing.id}`, { replace: true })
+    } else {
+      createFunding({ ...input, hostEmail: me.email })
+      navigate('/myposts', { replace: true })
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -22,7 +181,9 @@ export default function FundingForm() {
               ×
             </span>
           </button>
-          <p className="text-[18px] font-bold text-[var(--heading)]">펀딩 만들기</p>
+          <p className="text-[18px] font-bold text-[var(--heading)]">
+            {editing ? '펀딩 수정' : '펀딩 만들기'}
+          </p>
         </div>
       </header>
 
@@ -44,6 +205,14 @@ export default function FundingForm() {
           className="mt-[8px] w-full border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
         />
 
+        <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">설명</p>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="어떤 모임인지 자세히 소개해주세요"
+          className="mt-[8px] h-[96px] w-full resize-none rounded-[4px] border border-[var(--hairline)] p-[11px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
+        />
+
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">카테고리</p>
         <div className="mt-[8px] flex flex-wrap gap-[8px]">
           {categories.map((c) => (
@@ -63,13 +232,7 @@ export default function FundingForm() {
         </div>
 
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">장소</p>
-        <input
-          type="text"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="만날 장소를 입력해주세요"
-          className="mt-[8px] w-full border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
-        />
+        <LocationSearch value={place} onSelect={setPlace} />
 
         <div className="mt-[20px] flex gap-[16px]">
           <div className="flex-1">
@@ -77,7 +240,8 @@ export default function FundingForm() {
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              min={todayDateInput()}
+              onChange={(e) => handleDateChange(e.target.value)}
               className="mt-[8px] w-full border-b border-[var(--hairline)] py-[10px] text-[14px] text-[var(--heading)] focus:outline-none"
             />
           </div>
@@ -86,17 +250,19 @@ export default function FundingForm() {
             <input
               type="time"
               value={time}
-              onChange={(e) => setTime(e.target.value)}
+              onChange={(e) => handleTimeChange(e.target.value)}
               className="mt-[8px] w-full border-b border-[var(--hairline)] py-[10px] text-[14px] text-[var(--heading)] focus:outline-none"
             />
           </div>
         </div>
 
+        {error && <p className="mt-[8px] text-[12px] font-medium text-[var(--red)]">{error}</p>}
+
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">모집 인원</p>
         <div className="mt-[8px] flex items-center gap-[12px]">
           <button
             type="button"
-            onClick={() => setHeadcount((n) => Math.max(2, n - 1))}
+            onClick={() => setHeadcount((n) => Math.max(minHeadcount, n - 1))}
             className="flex size-[32px] items-center justify-center rounded-[4px] border border-[var(--border-card)] text-[16px] text-[var(--heading)]"
           >
             −
@@ -113,17 +279,49 @@ export default function FundingForm() {
           </button>
           <span className="text-[14px] text-[var(--label)]">명</span>
         </div>
+        {editing && existing && existing.participants.length > 2 && (
+          <p className="mt-[6px] text-[12px] text-[var(--border)]">
+            이미 {existing.participants.length}명이 참여 중이라 그 아래로는 줄일 수 없어요
+          </p>
+        )}
+
+        <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">모집 마감</p>
+        <input
+          type="datetime-local"
+          value={deadline}
+          min={nowDatetimeLocalInput()}
+          onChange={(e) => handleDeadlineChange(e.target.value)}
+          className="mt-[8px] w-full border-b border-[var(--hairline)] py-[10px] text-[14px] text-[var(--heading)] focus:outline-none"
+        />
 
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">참가비</p>
-        <p className="mt-[8px] text-[14px] text-[var(--border)]">0원 (무료로 등록됩니다)</p>
+        <div className="mt-[8px] flex items-center gap-[8px]">
+          <input
+            type="number"
+            min={0}
+            step={500}
+            value={fee}
+            onChange={(e) => setFee(Math.max(0, Number(e.target.value) || 0))}
+            placeholder="0"
+            className="w-full border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
+          />
+          <span className="shrink-0 text-[14px] text-[var(--label)]">원</span>
+        </div>
+        <p className="mt-[6px] text-[12px] text-[var(--border)]">
+          {fee === 0 ? '무료로 등록됩니다' : `1인당 ${fee.toLocaleString()}원`}
+        </p>
       </main>
 
       <div className="flex shrink-0 items-center border-t border-[var(--hairline)] px-[16px] py-[14px]">
         <button
           type="button"
-          className="flex h-[52px] flex-1 items-center justify-center rounded-[4px] bg-[var(--primary)]"
+          disabled={!canSubmit}
+          onClick={handleSubmit}
+          className="flex h-[52px] flex-1 items-center justify-center rounded-[4px] bg-[var(--primary)] disabled:opacity-40"
         >
-          <span className="text-[16px] font-medium text-[var(--on-primary)]">펀딩 만들기</span>
+          <span className="text-[16px] font-medium text-[var(--on-primary)]">
+            {editing ? '수정 완료' : '펀딩 만들기'}
+          </span>
         </button>
       </div>
     </div>
