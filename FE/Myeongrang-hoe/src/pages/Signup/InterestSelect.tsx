@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { patchDraft } from '../../store/signupDraft'
 
-const interests = ['맛집', '카페', '운동', '전시', '공연']
+const interests = ['맛집', '카페', '운동', '전시', '공연', '쇼핑']
 
 export default function InterestSelect() {
   const navigate = useNavigate()

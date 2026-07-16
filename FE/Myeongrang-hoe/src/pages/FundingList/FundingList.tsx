@@ -15,7 +15,7 @@ import { CAMPUS_CENTER } from '../../store/schema'
 import { filterBlockedFundingHost } from '../../store/moderation'
 import { distanceKm } from '../../lib/geo'
 
-const CATEGORIES = ['전체', '맛집', '교류', '산책', '스터디', '스포츠', '봉사'] as const
+const CATEGORIES = ['전체', '맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑'] as const
 type CategoryFilter = (typeof CATEGORIES)[number]
 type SortKey = 'latest' | 'almost' | 'nearby' | 'popular'
 
