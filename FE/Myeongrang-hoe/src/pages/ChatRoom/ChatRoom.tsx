@@ -13,6 +13,9 @@ import {
   syncChatFromServer,
   syncFundingDetail,
 } from '../../store/actions'
+import { getChatSeenAt, markChatSeen } from '../../lib/chatRead'
+
+const POLL_MS = 2000
 
 export default function ChatRoom() {
   const navigate = useNavigate()
@@ -25,19 +28,26 @@ export default function ChatRoom() {
   const [sending, setSending] = useState(false)
   const listRef = useRef<HTMLElement | null>(null)
 
+  // 2초 폴링 + 진입 시 즉시 동기화
   useEffect(() => {
     const numId = Number(id)
-    if (Number.isFinite(numId) && numId > 0) {
-      void syncFundingDetail(numId)
-      const timer = window.setInterval(() => {
-        void syncChatFromServer(numId)
-      }, 4000)
-      return () => window.clearInterval(timer)
-    }
+    if (!Number.isFinite(numId) || numId <= 0) return
+    void syncFundingDetail(numId)
+    void syncChatFromServer(numId)
+    const timer = window.setInterval(() => {
+      void syncChatFromServer(numId)
+    }, POLL_MS)
+    return () => window.clearInterval(timer)
   }, [id])
 
+  // 방 입장/새 메시지 수신 시 읽음 처리
   useEffect(() => {
-    // 새 메시지 시 스크롤 하단
+    if (messages.length === 0) return
+    const lastAt = messages[messages.length - 1]?.createdAt ?? 0
+    if (lastAt > 0) markChatSeen(funding.id, lastAt)
+  }, [funding.id, messages])
+
+  useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages.length])
@@ -50,8 +60,8 @@ export default function ChatRoom() {
     setDraft('')
     try {
       await sendChatMessage(funding.id, me.email, text)
+      markChatSeen(funding.id, Date.now())
     } catch {
-      // 실패 시 입력 복구
       setDraft(text)
     } finally {
       setSending(false)
@@ -59,12 +69,28 @@ export default function ChatRoom() {
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    // 한글 IME 조합 중 Enter / 키 반복 시 이중 전송 방지
     if (e.key !== 'Enter') return
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     e.preventDefault()
     void handleSend()
   }
+
+  // 내 메시지 이후 상대 메시지가 있으면 읽음으로 간주 (로컬 휴리스틱)
+  // 서버 읽음 동기화가 없으므로, 방이 열려 있을 때 상대 최신 시각 기준으로 표시
+  const myLastMsgIndex = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].authorEmail === me?.email) return i
+    }
+    return -1
+  })()
+  const peerSeenHeuristic =
+    myLastMsgIndex >= 0 &&
+    messages.slice(myLastMsgIndex + 1).some((m) => m.authorEmail !== 'system' && m.authorEmail !== me?.email)
+
+  // 방 재진입 시 이미 본 구간 이후 메시지는 읽음 처리됨 — 내 마지막 말 아래 읽음 표시
+  const showReadOnMyLast =
+    myLastMsgIndex >= 0 &&
+    (peerSeenHeuristic || getChatSeenAt(funding.id) >= (messages[myLastMsgIndex]?.createdAt ?? 0))
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
@@ -84,7 +110,7 @@ export default function ChatRoom() {
         ref={listRef}
         className="flex flex-1 flex-col gap-[12px] overflow-y-auto px-[16px] py-[16px]"
       >
-        {messages.map((m) => {
+        {messages.map((m, idx) => {
           if (m.authorEmail === 'system') {
             return (
               <div key={`${m.fundingId}-${m.id}`} className="flex justify-center">
@@ -100,13 +126,23 @@ export default function ChatRoom() {
             hour: '2-digit',
             minute: '2-digit',
           })
+          const isMyLast = isMe && idx === myLastMsgIndex
 
           if (isMe) {
             return (
-              <div key={`${m.fundingId}-${m.id}`} className="flex items-end justify-end gap-[6px]">
-                <span className="text-[11px] text-[var(--border)]">{time}</span>
-                <div className="max-w-[240px] rounded-[12px] bg-[var(--primary)] px-[14px] py-[10px]">
-                  <p className="text-[14px] text-white">{m.content}</p>
+              <div key={`${m.fundingId}-${m.id}`} className="flex flex-col items-end gap-[2px]">
+                <div className="flex items-end justify-end gap-[6px]">
+                  <div className="flex flex-col items-end gap-[2px]">
+                    {isMyLast && (
+                      <span className="text-[10px] text-[var(--primary-deep)]">
+                        {showReadOnMyLast && peerSeenHeuristic ? '읽음' : '전송됨'}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-[var(--border)]">{time}</span>
+                  </div>
+                  <div className="max-w-[240px] rounded-[12px] bg-[var(--primary)] px-[14px] py-[10px]">
+                    <p className="text-[14px] text-white">{m.content}</p>
+                  </div>
                 </div>
               </div>
             )

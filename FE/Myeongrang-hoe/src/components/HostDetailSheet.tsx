@@ -3,19 +3,27 @@ import hostAvatar from '../assets/hostdetail/host-avatar.svg'
 import sunlightIcon from '../assets/hostdetail/sunlight-icon.svg'
 import reviewerAvatar from '../assets/hostdetail/reviewer-avatar.svg'
 import { useDB } from '../store/db'
-import { getFunding, getUser, reviewsReceivedBy } from '../store/actions'
+import { getCurrentUser, getFunding, getUser, reviewsReceivedBy } from '../store/actions'
 import { sunlightTier } from '../lib/sunlight'
+import { isBlocked } from '../store/moderation'
 
 export default function HostDetailSheet({
   hostEmail,
   onClose,
+  onReport,
+  onBlock,
 }: {
   hostEmail: string
   onClose: () => void
+  onReport?: () => void
+  onBlock?: () => void
 }) {
   useDB()
   const host = getUser(hostEmail)
+  const me = getCurrentUser()
   const reviews = reviewsReceivedBy(hostEmail)
+  const blocked = isBlocked(hostEmail)
+  const isSelf = !!me && me.email.toLowerCase() === hostEmail.toLowerCase()
 
   if (!host) return null
 
@@ -37,15 +45,39 @@ export default function HostDetailSheet({
           <p className="text-[18px] font-bold text-[var(--heading)]">개최자 세부내역</p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-[12px] px-[16px] pt-[8px] pb-[16px]">
+        <div className="flex shrink-0 items-center gap-[12px] px-[16px] pt-[8px] pb-[12px]">
           <img src={hostAvatar} alt="" className="size-[64px]" />
-          <div className="flex flex-col items-start gap-[6px]">
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-[6px]">
             <p className="text-[18px] font-bold text-[var(--heading)]">{host.name}</p>
             <span className="rounded-[11px] bg-[var(--primary-tint)] px-[10px] py-[4px] text-[10px] font-bold text-[var(--primary-deep)]">
               {host.campus} · {host.age}살
             </span>
           </div>
         </div>
+
+        {!isSelf && (onReport || onBlock) && (
+          <div className="flex shrink-0 gap-[8px] px-[16px] pb-[12px]">
+            {onReport && (
+              <button
+                type="button"
+                onClick={onReport}
+                className="flex h-[36px] flex-1 items-center justify-center rounded-[4px] border border-[var(--border-card)] text-[13px] font-medium text-[var(--heading)]"
+              >
+                신고
+              </button>
+            )}
+            {onBlock && (
+              <button
+                type="button"
+                onClick={onBlock}
+                disabled={blocked}
+                className="flex h-[36px] flex-1 items-center justify-center rounded-[4px] border border-[var(--red)] text-[13px] font-medium text-[var(--red)] disabled:opacity-40"
+              >
+                {blocked ? '차단됨' : '차단'}
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex shrink-0 items-center gap-[14px] px-[16px]">
           <img src={sunlightIcon} alt="" className="size-[48px] shrink-0" />

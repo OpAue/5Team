@@ -73,11 +73,20 @@ export default function Notifications() {
           <Link
             key={n.id}
             to={n.to}
-            className="flex w-full items-start gap-[13px] border-b border-[var(--hairline)] px-[17px] py-[17px]"
+            className={`flex w-full items-start gap-[13px] border-b border-[var(--hairline)] px-[17px] py-[17px] ${
+              n.kind === 'wishlist-almost' ? 'bg-[var(--primary-tint)]/40' : ''
+            }`}
           >
             <img src={n.icon} alt="" className="size-[21px] shrink-0" />
             <div className="flex min-w-0 flex-1 flex-col gap-[4px]">
-              <p className="truncate text-[15px] font-bold text-[var(--heading)]">{n.title}</p>
+              <div className="flex items-center gap-[6px]">
+                <p className="truncate text-[15px] font-bold text-[var(--heading)]">{n.title}</p>
+                {n.kind === 'wishlist-almost' && (
+                  <span className="shrink-0 rounded-full bg-[var(--red)] px-[6px] py-[1px] text-[10px] font-bold text-white">
+                    찜
+                  </span>
+                )}
+              </div>
               <p className="text-[13px] text-[var(--label)]">{n.body}</p>
               <p className="text-[12px] text-[var(--border)]">{timeAgo(n.createdAt)}</p>
             </div>

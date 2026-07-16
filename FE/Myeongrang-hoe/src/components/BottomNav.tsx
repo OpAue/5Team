@@ -3,6 +3,9 @@ import activeIcon from '../assets/shared/nav/active.svg'
 import inactiveIcon from '../assets/shared/nav/inactive.svg'
 import myPostsActiveIcon from '../assets/shared/nav/myposts-active.svg'
 import myPostsInactiveIcon from '../assets/shared/nav/myposts-inactive.svg'
+import { useDB } from '../store/db'
+import { chatMessagesOf, fundingsOf, getCurrentUser } from '../store/actions'
+import { countUnreadChat } from '../lib/chatRead'
 
 export type NavKey = 'home' | 'list' | 'chat' | 'myposts' | 'mypage'
 
@@ -29,6 +32,15 @@ function ChatIcon({ active }: { active: boolean }) {
 }
 
 export default function BottomNav({ active }: { active: NavKey }) {
+  useDB()
+  const me = getCurrentUser()
+  const chatUnread = me
+    ? fundingsOf(me.email).reduce(
+        (sum, f) => sum + countUnreadChat(f.id, chatMessagesOf(f.id), me.email),
+        0,
+      )
+    : 0
+
   return (
     <nav className="flex h-[77px] w-full shrink-0 border-t border-[var(--hairline)] bg-white">
       {items.map((item) => {
@@ -40,23 +52,30 @@ export default function BottomNav({ active }: { active: NavKey }) {
             to={item.to}
             className="flex flex-1 flex-col items-center justify-center gap-[4px]"
           >
-            {item.key === 'chat' ? (
-              <ChatIcon active={isActive} />
-            ) : (
-              <img
-                src={
-                  item.key === 'myposts'
-                    ? isActive
-                      ? myPostsActiveIcon
-                      : myPostsInactiveIcon
-                    : isActive
-                      ? activeIcon
-                      : inactiveIcon
-                }
-                alt=""
-                className="size-[21px]"
-              />
-            )}
+            <div className="relative">
+              {item.key === 'chat' ? (
+                <ChatIcon active={isActive} />
+              ) : (
+                <img
+                  src={
+                    item.key === 'myposts'
+                      ? isActive
+                        ? myPostsActiveIcon
+                        : myPostsInactiveIcon
+                      : isActive
+                        ? activeIcon
+                        : inactiveIcon
+                  }
+                  alt=""
+                  className="size-[21px]"
+                />
+              )}
+              {item.key === 'chat' && chatUnread > 0 && (
+                <span className="absolute -right-[8px] -top-[4px] flex min-w-[16px] items-center justify-center rounded-full bg-[var(--red)] px-[4px] py-[1px] text-[9px] font-bold text-white">
+                  {chatUnread > 99 ? '99+' : chatUnread}
+                </span>
+              )}
+            </div>
             <span
               className={`text-[12px] whitespace-nowrap ${
                 isActive ? 'font-bold text-[var(--heading)]' : 'font-medium text-[var(--border)]'

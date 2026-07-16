@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Map, MapMarker } from 'react-kakao-maps-sdk'
 import HostDetailSheet from '../../components/HostDetailSheet'
 import BackButton from '../../components/BackButton'
+import ReportModal from '../../components/ReportModal'
 import { useDB } from '../../store/db'
 import {
   addComment,
@@ -25,12 +26,14 @@ import {
 } from '../../store/actions'
 import FundingCover from '../../components/FundingCover'
 import { useKakao } from '../../lib/kakao'
+import { shareFunding } from '../../lib/share'
 import shareBtn from '../../assets/fundingtab/share-btn.svg'
 import UserAvatar from '../../components/UserAvatar'
 import chatNoteIcon from '../../assets/fundingtab/chat-note-icon.svg'
 import aiIcon from '../../assets/fundingtab/ai-icon.svg'
 import infoIcon from '../../assets/fundingtab/info-icon.svg'
 import { sunlightTier } from '../../lib/sunlight'
+import { blockUser, isBlocked } from '../../store/moderation'
 
 const riskCopy: Record<string, { label: string; body: string }> = {
   낮음: {
@@ -57,6 +60,14 @@ export default function FundingTab() {
   const [kakaoLoading, kakaoError] = useKakao()
 
   const [showHostDetail, setShowHostDetail] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{
+    type: 'user' | 'funding'
+    id: string
+    email?: string
+    title?: string
+  } | null>(null)
   const [draft, setDraft] = useState('')
   const [commentSending, setCommentSending] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -114,6 +125,37 @@ export default function FundingTab() {
     confirmFunding(funding.id)
   }
 
+  async function handleShare() {
+    await shareFunding({
+      title: funding.title,
+      description: `${funding.category} · ${funding.locationName} · ${funding.meetTimeText}`,
+      path: `/funding/${funding.id}`,
+      imageUrl: funding.coverImage?.startsWith('http') ? funding.coverImage : undefined,
+    })
+  }
+
+  function openReportFunding() {
+    setShowMenu(false)
+    setReportTarget({
+      type: 'funding',
+      id: String(funding.id),
+      email: funding.hostEmail,
+      title: '펀딩 신고하기',
+    })
+    setReportOpen(true)
+  }
+
+  function openReportHost() {
+    setShowMenu(false)
+    setReportTarget({
+      type: 'user',
+      id: funding.hostEmail,
+      email: funding.hostEmail,
+      title: '개최자 신고하기',
+    })
+    setReportOpen(true)
+  }
+
   const current = currentCountOf(funding)
   const matched = isMatched(funding)
   const expired = isExpired(funding)
@@ -123,6 +165,20 @@ export default function FundingTab() {
   const wishlisted = !!me && isWishlisted(me.email, funding.id)
   const comments = commentsOf(funding.id)
   const iAmHost = !!me && isHost(funding, me.email)
+  const hostBlocked = isBlocked(funding.hostEmail)
+
+  function handleBlockHost() {
+    setShowMenu(false)
+    if (!funding.hostEmail || iAmHost) return
+    if (
+      !window.confirm(
+        `${host?.name ?? '이 개최자'}님을 차단할까요? 해당 사용자의 펀딩이 목록에서 숨겨집니다.`,
+      )
+    ) {
+      return
+    }
+    blockUser(funding.hostEmail)
+  }
 
   function handleLeave() {
     if (!me || iAmHost) return
@@ -143,7 +199,7 @@ export default function FundingTab() {
         <div className="h-[26px]" />
         <div className="relative flex h-[60px] items-center px-[17px]">
           <BackButton onClick={() => navigate(-1)} />
-          <div className="absolute right-[17px] flex items-center gap-[14px]">
+          <div className="absolute right-[17px] flex items-center gap-[10px]">
             {iAmHost && (
               <Link to={`/funding/${funding.id}/edit`} className="text-[13px] font-bold text-[var(--primary-deep)]">
                 수정
@@ -154,10 +210,63 @@ export default function FundingTab() {
                 {wishlisted ? '♥' : '♡'}
               </span>
             </button>
-            <img src={shareBtn} alt="공유" className="size-[39px]" />
+            <button type="button" onClick={() => void handleShare()} aria-label="공유">
+              <img src={shareBtn} alt="" className="size-[39px]" />
+            </button>
+            {!iAmHost && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowMenu((v) => !v)}
+                  aria-label="더보기"
+                  className="flex size-[36px] items-center justify-center rounded-full text-[18px] font-bold text-[var(--label)]"
+                >
+                  ⋯
+                </button>
+                {showMenu && (
+                  <>
+                    <button
+                      type="button"
+                      className="fixed inset-0 z-[40]"
+                      aria-label="메뉴 닫기"
+                      onClick={() => setShowMenu(false)}
+                    />
+                    <div className="absolute right-0 top-[40px] z-[50] min-w-[148px] overflow-hidden rounded-[8px] border border-[var(--hairline)] bg-white shadow-lg">
+                      <button
+                        type="button"
+                        onClick={openReportFunding}
+                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
+                      >
+                        펀딩 신고
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openReportHost}
+                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
+                      >
+                        개최자 신고
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBlockHost}
+                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--red)] hover:bg-[var(--hairline)]"
+                      >
+                        {hostBlocked ? '이미 차단됨' : '개최자 차단'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>
+
+      {hostBlocked && !iAmHost && (
+        <div className="bg-[#FFF4F4] px-[17px] py-[10px] text-[13px] text-[var(--red)]">
+          차단한 개최자의 펀딩입니다. 목록에는 표시되지 않아요.
+        </div>
+      )}
 
       <main className="flex-1 overflow-y-auto">
         <FundingCover
@@ -437,7 +546,32 @@ export default function FundingTab() {
       </div>
 
       {showHostDetail && (
-        <HostDetailSheet hostEmail={funding.hostEmail} onClose={() => setShowHostDetail(false)} />
+        <HostDetailSheet
+          hostEmail={funding.hostEmail}
+          onClose={() => setShowHostDetail(false)}
+          onReport={() => {
+            setShowHostDetail(false)
+            openReportHost()
+          }}
+          onBlock={() => {
+            setShowHostDetail(false)
+            handleBlockHost()
+          }}
+        />
+      )}
+
+      {reportTarget && (
+        <ReportModal
+          open={reportOpen}
+          onClose={() => {
+            setReportOpen(false)
+            setReportTarget(null)
+          }}
+          targetType={reportTarget.type}
+          targetId={reportTarget.id}
+          targetEmail={reportTarget.email}
+          title={reportTarget.title}
+        />
       )}
     </div>
   )

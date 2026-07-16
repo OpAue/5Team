@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Map, CustomOverlayMap, MapMarker, ZoomControl } from 'react-kakao-maps-sdk'
 import BottomNav from '../../components/BottomNav'
@@ -21,6 +21,9 @@ import {
 } from '../../store/actions'
 import { distanceKm, type LatLng } from '../../lib/geo'
 import { formatKakaoError, relayoutMap, useKakao } from '../../lib/kakao'
+import { filterBlockedFundingHost } from '../../store/moderation'
+import { wishlistAlmostFullItems } from '../../store/notifications'
+import { showToast } from '../../store/ui'
 
 const MAP_HEIGHT = 343
 
@@ -34,6 +37,7 @@ export default function Home() {
   const [locating, setLocating] = useState(true)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [refreshTick, setRefreshTick] = useState(0)
+  const toastedWishlist = useRef(new Set<string>())
 
   function locate() {
     setLocating(true)
@@ -43,6 +47,18 @@ export default function Home() {
   useEffect(() => {
     void syncMeFromServer()
   }, [])
+
+  // 찜한 펀딩 성사 임박 시 1회 토스트
+  useEffect(() => {
+    if (!me) return
+    const items = wishlistAlmostFullItems(me.email)
+    for (const n of items) {
+      if (toastedWishlist.current.has(n.id)) continue
+      toastedWishlist.current.add(n.id)
+      showToast(n.title + ' · ' + n.body, 'info')
+      break // 한 번에 하나만
+    }
+  }, [me?.email, db.fundings, db.wishlist])
 
   useEffect(() => {
     void syncFundingsFromServer(
@@ -94,7 +110,7 @@ export default function Home() {
   const center = myLocation ?? CAMPUS_CENTER
 
   const sorted = useMemo(() => {
-    return db.fundings
+    return filterBlockedFundingHost(db.fundings)
       .map((f) => ({ ...f, distanceKm: distanceKm(center, { lat: f.lat, lng: f.lng }) }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
   }, [center, db.fundings])
