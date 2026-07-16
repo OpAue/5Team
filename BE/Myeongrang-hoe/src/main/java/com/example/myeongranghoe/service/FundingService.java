@@ -100,6 +100,9 @@ public class FundingService {
         if (funding.getParticipants().contains(user)) {
             return FundingResponse.from(funding);
         }
+        if (funding.isClosed()) {
+            throw new IllegalArgumentException("호스트가 모집을 마감한 펀딩이에요.");
+        }
         if (funding.isMatched() || funding.currentCount() >= funding.getTargetCount()) {
             throw new IllegalArgumentException("이미 모집이 마감된 펀딩이에요.");
         }
@@ -132,6 +135,9 @@ public class FundingService {
         if (!funding.getHostEmail().equals(normalize(hostEmail))) {
             throw new IllegalArgumentException("호스트만 모집을 확정할 수 있어요.");
         }
+        if (funding.isClosed()) {
+            throw new IllegalArgumentException("이미 마감된 펀딩이에요.");
+        }
         int current = funding.currentCount();
         if (current < 2) {
             throw new IllegalArgumentException("혼자일 때는 모집을 확정할 수 없어요.");
@@ -139,6 +145,65 @@ public class FundingService {
         funding.setTargetCount(current);
         funding.setMatched(true);
         addSystemChat(funding.getId(), "호스트가 현재 인원으로 모집을 확정했어요. 채팅으로 일정을 맞춰보세요!");
+        return FundingResponse.from(fundingRepository.save(funding));
+    }
+
+    /** 호스트 조기 마감 (참여 불가, 목록에는 남김) */
+    @Transactional
+    public FundingResponse close(Long id, String hostEmail) {
+        Funding funding = require(id);
+        if (!funding.getHostEmail().equals(normalize(hostEmail))) {
+            throw new IllegalArgumentException("호스트만 모집을 마감할 수 있어요.");
+        }
+        funding.setClosed(true);
+        funding.setMatched(true);
+        addSystemChat(funding.getId(), "호스트가 모집을 마감했어요.");
+        return FundingResponse.from(fundingRepository.save(funding));
+    }
+
+    /** 호스트 펀딩 삭제 */
+    @Transactional
+    public void delete(Long id, String hostEmail) {
+        Funding funding = require(id);
+        if (!funding.getHostEmail().equals(normalize(hostEmail))) {
+            throw new IllegalArgumentException("호스트만 삭제할 수 있어요.");
+        }
+        fundingRepository.delete(funding);
+    }
+
+    /** 성사 후 만남 일정 확정 */
+    @Transactional
+    public FundingResponse confirmSchedule(Long id, String hostEmail, ScheduleCommand cmd) {
+        Funding funding = require(id);
+        if (!funding.getHostEmail().equals(normalize(hostEmail))) {
+            throw new IllegalArgumentException("호스트만 일정을 확정할 수 있어요.");
+        }
+        if (!funding.isMatched() && funding.currentCount() < funding.getTargetCount()) {
+            throw new IllegalArgumentException("모집이 성사된 뒤에 일정을 확정할 수 있어요.");
+        }
+        if (cmd.meetAt() != null && !cmd.meetAt().isBlank()) {
+            funding.setMeetAt(cmd.meetAt().trim());
+        }
+        if (cmd.meetTimeText() != null && !cmd.meetTimeText().isBlank()) {
+            funding.setMeetTimeText(cmd.meetTimeText().trim());
+        }
+        if (cmd.locationName() != null && !cmd.locationName().isBlank()) {
+            funding.setLocationName(cmd.locationName().trim());
+        }
+        if (cmd.address() != null) {
+            funding.setAddress(cmd.address().trim());
+        }
+        if (cmd.lat() != null) {
+            funding.setLat(cmd.lat());
+        }
+        if (cmd.lng() != null) {
+            funding.setLng(cmd.lng());
+        }
+        funding.setMatched(true);
+        funding.setScheduleConfirmed(true);
+        String place = funding.getLocationName().isBlank() ? "장소 미정" : funding.getLocationName();
+        String when = funding.getMeetTimeText().isBlank() ? "시간 미정" : funding.getMeetTimeText();
+        addSystemChat(funding.getId(), "만남 일정이 확정됐어요 · " + when + " · " + place);
         return FundingResponse.from(fundingRepository.save(funding));
     }
 
@@ -235,5 +300,14 @@ public class FundingService {
             int targetCount,
             int fee,
             String coverImage
+    ) {}
+
+    public record ScheduleCommand(
+            String meetAt,
+            String meetTimeText,
+            String locationName,
+            String address,
+            Double lat,
+            Double lng
     ) {}
 }

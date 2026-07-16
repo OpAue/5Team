@@ -1,7 +1,10 @@
 import {
   addCommentApi,
+  closeFundingApi,
   confirmFundingApi,
+  confirmScheduleApi,
   deleteCommentApi,
+  deleteFundingApi,
   createFundingApi,
   fetchChat,
   fetchComments,
@@ -14,6 +17,7 @@ import {
   getAccessToken,
   joinFundingApi,
   leaveFundingApi,
+  resolveMediaUrl,
   sendChatApi,
   setAccessToken,
   submitReviewApi,
@@ -38,7 +42,17 @@ export function currentCountOf(f: FundingRecord): number {
 }
 
 export function isMatched(f: FundingRecord): boolean {
+  if (f.matched) return true
   return currentCountOf(f) >= f.targetCount
+}
+
+export function isClosed(f: FundingRecord): boolean {
+  return !!f.closed
+}
+
+/** 신규 참여 가능 여부 */
+export function isJoinable(f: FundingRecord): boolean {
+  return !isClosed(f) && !isMatched(f) && !isExpired(f)
 }
 
 export function isExpired(f: FundingRecord): boolean {
@@ -154,10 +168,11 @@ export function applyServerUser(
 
   mutate((d) => {
     const existing = d.users[user.email]
-    const avatar =
+    const rawAvatar =
       user.avatarImage !== undefined && user.avatarImage !== null
         ? user.avatarImage || undefined
         : existing?.avatarImage
+    const avatar = resolveMediaUrl(rawAvatar) || rawAvatar || undefined
     d.users[user.email] = {
       email: user.email,
       password: options?.password ?? existing?.password ?? '',
@@ -325,10 +340,13 @@ function mapApiFunding(f: ApiFunding): FundingRecord {
     fillerParticipants: f.fillerParticipants,
     participants: f.participants ?? [],
     description: f.description,
-    coverImage: f.coverImage || undefined,
+    coverImage: resolveMediaUrl(f.coverImage) || undefined,
     hostEmail: f.hostEmail,
     aiRisk: risk,
     best: f.best,
+    matched: f.matched,
+    closed: f.closed,
+    scheduleConfirmed: f.scheduleConfirmed,
     createdAt: f.createdAt,
   }
 }
@@ -711,6 +729,7 @@ export function confirmFunding(fundingId: number) {
     const current = f.fillerParticipants + f.participants.length
     if (current < 2) return
     f.targetCount = current
+    f.matched = true
   })
   if (getAccessToken()) {
     void confirmFundingApi(fundingId)
@@ -722,6 +741,91 @@ export function confirmFunding(fundingId: number) {
         showToast(e instanceof Error ? e.message : '모집 확정에 실패했어요', 'error')
       })
   }
+}
+
+/** 호스트 조기 마감 */
+export function closeFunding(fundingId: number) {
+  mutate((d) => {
+    const f = d.fundings.find((x) => x.id === fundingId)
+    if (!f) return
+    f.closed = true
+    f.matched = true
+  })
+  if (getAccessToken()) {
+    void closeFundingApi(fundingId)
+      .then((api) => {
+        upsertLocalFunding(mapApiFunding(api))
+        showToast('모집을 마감했어요', 'info')
+      })
+      .catch((e) => {
+        showToast(e instanceof Error ? e.message : '모집 마감에 실패했어요', 'error')
+      })
+  } else {
+    showToast('모집을 마감했어요', 'info')
+  }
+}
+
+/** 호스트 펀딩 삭제 */
+export async function deleteFunding(fundingId: number): Promise<void> {
+  if (getAccessToken()) {
+    try {
+      await deleteFundingApi(fundingId)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '삭제에 실패했어요', 'error')
+      throw e
+    }
+  }
+  mutate((d) => {
+    d.fundings = d.fundings.filter((f) => f.id !== fundingId)
+    d.comments = d.comments.filter((c) => c.fundingId !== fundingId)
+    d.chatMessages = d.chatMessages.filter((m) => m.fundingId !== fundingId)
+  })
+  showToast('펀딩을 삭제했어요', 'info')
+}
+
+/** 성사 후 만남 일정 확정 */
+export async function confirmSchedule(
+  fundingId: number,
+  input: {
+    meetAt: string
+    meetTimeText: string
+    locationName: string
+    address?: string
+    lat?: number
+    lng?: number
+  },
+): Promise<void> {
+  if (getAccessToken()) {
+    try {
+      const api = await confirmScheduleApi(fundingId, input)
+      upsertLocalFunding(mapApiFunding(api))
+      showToast('만남 일정을 확정했어요', 'success')
+      return
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '일정 확정에 실패했어요', 'error')
+      throw e
+    }
+  }
+  mutate((d) => {
+    const f = d.fundings.find((x) => x.id === fundingId)
+    if (!f) return
+    f.meetAt = input.meetAt
+    f.meetTimeText = input.meetTimeText
+    f.locationName = input.locationName
+    if (input.address != null) f.address = input.address
+    if (input.lat != null) f.lat = input.lat
+    if (input.lng != null) f.lng = input.lng
+    f.matched = true
+    f.scheduleConfirmed = true
+    d.chatMessages.push({
+      id: d.nextChatId++,
+      fundingId,
+      authorEmail: 'system',
+      content: `만남 일정이 확정됐어요 · ${input.meetTimeText} · ${input.locationName}`,
+      createdAt: Date.now(),
+    })
+  })
+  showToast('만남 일정을 확정했어요', 'success')
 }
 
 /**

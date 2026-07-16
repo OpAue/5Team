@@ -90,6 +90,14 @@ public class Funding {
     @Column(name = "matched", nullable = false)
     private boolean matched = false;
 
+    /** 호스트가 조기 마감/취소한 경우 참여 불가 */
+    @Column(name = "closed", nullable = false)
+    private boolean closed = false;
+
+    /** 성사 후 만남 일정 확정 여부 */
+    @Column(name = "schedule_confirmed", nullable = false)
+    private boolean scheduleConfirmed = false;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -274,6 +282,22 @@ public class Funding {
 
     public void setMatched(boolean matched) {
         this.matched = matched;
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    public void setClosed(boolean closed) {
+        this.closed = closed;
+    }
+
+    public boolean isScheduleConfirmed() {
+        return scheduleConfirmed;
+    }
+
+    public void setScheduleConfirmed(boolean scheduleConfirmed) {
+        this.scheduleConfirmed = scheduleConfirmed;
     }
 
     public Instant getCreatedAt() {

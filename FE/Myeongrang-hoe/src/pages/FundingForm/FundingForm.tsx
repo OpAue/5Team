@@ -10,6 +10,7 @@ import {
   updateFundingAsync,
 } from '../../store/actions'
 import { setGlobalLoading, showToast } from '../../store/ui'
+import { getAccessToken, uploadImageApi } from '../../lib/api'
 
 const categories = ['맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑']
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024 // 2MB
@@ -161,7 +162,7 @@ export default function FundingForm() {
     setError(computeScheduleError(date, time, nextDeadline))
   }
 
-  function handleImageChange(file: File | null) {
+  async function handleImageChange(file: File | null) {
     if (!file) return
     if (!file.type.startsWith('image/')) {
       showToast('이미지 파일만 올릴 수 있어요', 'error')
@@ -171,6 +172,22 @@ export default function FundingForm() {
       showToast('이미지는 2MB 이하만 올릴 수 있어요', 'error')
       return
     }
+
+    // 로그인 시 서버 파일 저장, 실패/오프라인 시 data URL 폴백
+    if (getAccessToken()) {
+      setGlobalLoading(true, '이미지 업로드 중...')
+      try {
+        const url = await uploadImageApi(file)
+        setCoverImage(url)
+        showToast('사진을 서버에 올렸어요', 'success')
+        return
+      } catch {
+        showToast('서버 업로드 실패, 로컬 미리보기로 저장해요', 'info')
+      } finally {
+        setGlobalLoading(false)
+      }
+    }
+
     const reader = new FileReader()
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : ''
@@ -178,7 +195,6 @@ export default function FundingForm() {
         showToast('이미지를 읽지 못했어요', 'error')
         return
       }
-      // base64 팽창 후에도 대략 3MB 넘으면 거부
       if (result.length > 3_000_000) {
         showToast('이미지가 너무 커요. 2MB 이하로 올려주세요', 'error')
         return

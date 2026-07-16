@@ -18,9 +18,23 @@ import { distanceKm } from '../../lib/geo'
 const CATEGORIES = ['전체', '맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑'] as const
 type CategoryFilter = (typeof CATEGORIES)[number]
 type SortKey = 'latest' | 'almost' | 'nearby' | 'popular'
+type DateFilter = 'all' | 'today' | 'week'
+type RadiusFilter = 'all' | '1' | '3' | 'campus'
 
 function normalize(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, '')
+}
+
+function startOfDay(d: Date) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x.getTime()
+}
+
+function endOfDay(d: Date) {
+  const x = new Date(d)
+  x.setHours(23, 59, 59, 999)
+  return x.getTime()
 }
 
 export default function FundingList() {
@@ -28,6 +42,9 @@ export default function FundingList() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<CategoryFilter>('전체')
   const [sort, setSort] = useState<SortKey>('latest')
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all')
+  const [radiusFilter, setRadiusFilter] = useState<RadiusFilter>('all')
+  const [freeOnly, setFreeOnly] = useState(false)
   const [hideExpired, setHideExpired] = useState(true)
   const [hideMatched, setHideMatched] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -54,12 +71,31 @@ export default function FundingList() {
     if (category !== '전체') {
       list = list.filter((g) => g.category === category)
     }
+    if (hideExpired) list = list.filter((g) => !isExpired(g))
+    if (hideMatched) list = list.filter((g) => !isMatched(g))
+    if (freeOnly) list = list.filter((g) => (g.fee ?? 0) === 0)
 
-    if (hideExpired) {
-      list = list.filter((g) => !isExpired(g))
+    // 날짜 필터 (만남일 기준, 없으면 생성일)
+    if (dateFilter !== 'all') {
+      const now = new Date()
+      const todayStart = startOfDay(now)
+      const todayEnd = endOfDay(now)
+      const weekEnd = todayStart + 7 * 24 * 60 * 60 * 1000
+      list = list.filter((g) => {
+        const t = g.meetAt ? new Date(g.meetAt).getTime() : g.createdAt
+        if (Number.isNaN(t)) return false
+        if (dateFilter === 'today') return t >= todayStart && t <= todayEnd
+        return t >= todayStart && t < weekEnd
+      })
     }
-    if (hideMatched) {
-      list = list.filter((g) => !isMatched(g))
+
+    // 거리
+    const radiusKm =
+      radiusFilter === '1' ? 1 : radiusFilter === '3' ? 3 : radiusFilter === 'campus' ? 1.5 : null
+    if (radiusKm != null) {
+      list = list.filter(
+        (g) => distanceKm(CAMPUS_CENTER, { lat: g.lat, lng: g.lng }) <= radiusKm,
+      )
     }
 
     if (tokens.length > 0) {
@@ -70,7 +106,6 @@ export default function FundingList() {
             ' ',
           ),
         )
-        // 모든 토큰이 포함되어야 함 (AND 검색)
         return tokens.every((t) => hay.includes(t))
       })
     }
@@ -85,7 +120,6 @@ export default function FundingList() {
     withMeta.sort((a, b) => {
       switch (sort) {
         case 'almost':
-          // 성사 임박 우선 (남은 인원 적음 → 진행률 높음)
           if (a.remaining !== b.remaining) return a.remaining - b.remaining
           return b.current / b.g.targetCount - a.current / a.g.targetCount
         case 'nearby':
@@ -100,7 +134,17 @@ export default function FundingList() {
     })
 
     return withMeta
-  }, [db.fundings, search, category, sort, hideExpired, hideMatched])
+  }, [
+    db.fundings,
+    search,
+    category,
+    sort,
+    dateFilter,
+    radiusFilter,
+    freeOnly,
+    hideExpired,
+    hideMatched,
+  ])
 
   return (
     <div className="relative flex h-screen flex-col overflow-hidden bg-white">
@@ -128,7 +172,6 @@ export default function FundingList() {
             )}
           </div>
 
-          {/* 카테고리 칩 */}
           <div className="-mx-[17px] overflow-x-auto px-[17px]">
             <div className="flex w-max gap-[8px] pb-[2px]">
               {CATEGORIES.map((c) => {
@@ -151,7 +194,62 @@ export default function FundingList() {
             </div>
           </div>
 
-          {/* 정렬 + 필터 토글 */}
+          {/* 날짜 · 요금 · 거리 */}
+          <div className="flex flex-wrap items-center gap-[8px]">
+            {(
+              [
+                { key: 'all' as const, label: '날짜 전체' },
+                { key: 'today' as const, label: '오늘' },
+                { key: 'week' as const, label: '이번 주' },
+              ] as const
+            ).map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setDateFilter(d.key)}
+                className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
+                  dateFilter === d.key
+                    ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
+                    : 'border-[var(--border-card)] text-[var(--label)]'
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setFreeOnly((v) => !v)}
+              className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
+                freeOnly
+                  ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
+                  : 'border-[var(--border-card)] text-[var(--label)]'
+              }`}
+            >
+              무료만
+            </button>
+            {(
+              [
+                { key: 'all' as const, label: '거리∞' },
+                { key: '1' as const, label: '1km' },
+                { key: '3' as const, label: '3km' },
+                { key: 'campus' as const, label: '캠퍼스' },
+              ] as const
+            ).map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setRadiusFilter(r.key)}
+                className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
+                  radiusFilter === r.key
+                    ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
+                    : 'border-[var(--border-card)] text-[var(--label)]'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-wrap items-center gap-[8px]">
             {(
               [
@@ -211,7 +309,9 @@ export default function FundingList() {
 
           {!loading && filtered.length === 0 && (
             <p className="py-[24px] text-center text-[14px] text-[var(--border)]">
-              {search || category !== '전체' ? '조건에 맞는 펀딩이 없어요' : '아직 등록된 펀딩이 없어요'}
+              {search || category !== '전체' || freeOnly || dateFilter !== 'all'
+                ? '조건에 맞는 펀딩이 없어요'
+                : '아직 등록된 펀딩이 없어요'}
             </p>
           )}
 
@@ -231,7 +331,7 @@ export default function FundingList() {
                 foot:
                   g.targetCount - current === 1
                     ? `${current}/${g.targetCount}명 · 목표 달성 임박`
-                    : `${current}/${g.targetCount}명 참여`,
+                    : `${current}/${g.targetCount}명 참여${g.fee === 0 ? ' · 무료' : ''}`,
                 best: g.best,
                 expired: isExpired(g),
                 coverImage: g.coverImage,

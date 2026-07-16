@@ -4,18 +4,24 @@ import { Map, MapMarker } from 'react-kakao-maps-sdk'
 import HostDetailSheet from '../../components/HostDetailSheet'
 import BackButton from '../../components/BackButton'
 import ReportModal from '../../components/ReportModal'
+import ScheduleConfirmModal from '../../components/ScheduleConfirmModal'
+import UserProfileSheet from '../../components/UserProfileSheet'
 import { useDB } from '../../store/db'
 import {
   addComment,
+  closeFunding,
   commentsOf,
   confirmFunding,
   currentCountOf,
   deleteComment,
+  deleteFunding,
   getCurrentUser,
   getFunding,
   getUser,
+  isClosed,
   isExpired,
   isHost,
+  isJoinable,
   isMatched,
   isParticipant,
   isWishlisted,
@@ -27,6 +33,7 @@ import {
 import FundingCover from '../../components/FundingCover'
 import { useKakao } from '../../lib/kakao'
 import { shareFunding } from '../../lib/share'
+import { buildGoogleCalendarUrl, downloadIcs } from '../../lib/calendar'
 import shareBtn from '../../assets/fundingtab/share-btn.svg'
 import UserAvatar from '../../components/UserAvatar'
 import chatNoteIcon from '../../assets/fundingtab/chat-note-icon.svg'
@@ -60,6 +67,8 @@ export default function FundingTab() {
   const [kakaoLoading, kakaoError] = useKakao()
 
   const [showHostDetail, setShowHostDetail] = useState(false)
+  const [profileEmail, setProfileEmail] = useState<string | null>(null)
+  const [showSchedule, setShowSchedule] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{
@@ -112,8 +121,25 @@ export default function FundingTab() {
   }
 
   function handleJoin() {
-    if (!me || isMatched(funding) || isExpired(funding)) return
+    if (!me || !isJoinable(funding)) return
     joinFunding(funding.id, me.email)
+  }
+
+  async function handleDeleteFunding() {
+    setShowMenu(false)
+    if (!window.confirm('이 펀딩을 삭제할까요? 되돌릴 수 없어요.')) return
+    try {
+      await deleteFunding(funding.id)
+      navigate('/myposts', { replace: true })
+    } catch {
+      // toast
+    }
+  }
+
+  function handleCloseFunding() {
+    setShowMenu(false)
+    if (!window.confirm('모집을 조기 마감할까요? 더 이상 새 참여자를 받지 않아요.')) return
+    closeFunding(funding.id)
   }
 
   function handleWishlist() {
@@ -159,6 +185,7 @@ export default function FundingTab() {
   const current = currentCountOf(funding)
   const matched = isMatched(funding)
   const expired = isExpired(funding)
+  const closed = isClosed(funding)
   const joined = !!me && isParticipant(funding, me.email)
   const progress = Math.round((current / funding.targetCount) * 100)
   const risk = riskCopy[funding.aiRisk]
@@ -166,6 +193,15 @@ export default function FundingTab() {
   const comments = commentsOf(funding.id)
   const iAmHost = !!me && isHost(funding, me.email)
   const hostBlocked = isBlocked(funding.hostEmail)
+  const joinable = isJoinable(funding)
+  const calendarUrl =
+    funding.meetAt &&
+    buildGoogleCalendarUrl({
+      title: `[명랑회] ${funding.title}`,
+      description: funding.description,
+      location: [funding.locationName, funding.address].filter(Boolean).join(' '),
+      start: funding.meetAt,
+    })
 
   function handleBlockHost() {
     setShowMenu(false)
@@ -213,51 +249,72 @@ export default function FundingTab() {
             <button type="button" onClick={() => void handleShare()} aria-label="공유">
               <img src={shareBtn} alt="" className="size-[39px]" />
             </button>
-            {!iAmHost && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowMenu((v) => !v)}
-                  aria-label="더보기"
-                  className="flex size-[36px] items-center justify-center rounded-full text-[18px] font-bold text-[var(--label)]"
-                >
-                  ⋯
-                </button>
-                {showMenu && (
-                  <>
-                    <button
-                      type="button"
-                      className="fixed inset-0 z-[40]"
-                      aria-label="메뉴 닫기"
-                      onClick={() => setShowMenu(false)}
-                    />
-                    <div className="absolute right-0 top-[40px] z-[50] min-w-[148px] overflow-hidden rounded-[8px] border border-[var(--hairline)] bg-white shadow-lg">
-                      <button
-                        type="button"
-                        onClick={openReportFunding}
-                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
-                      >
-                        펀딩 신고
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openReportHost}
-                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
-                      >
-                        개최자 신고
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleBlockHost}
-                        className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--red)] hover:bg-[var(--hairline)]"
-                      >
-                        {hostBlocked ? '이미 차단됨' : '개최자 차단'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMenu((v) => !v)}
+                aria-label="더보기"
+                className="flex size-[36px] items-center justify-center rounded-full text-[18px] font-bold text-[var(--label)]"
+              >
+                ⋯
+              </button>
+              {showMenu && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-[40]"
+                    aria-label="메뉴 닫기"
+                    onClick={() => setShowMenu(false)}
+                  />
+                  <div className="absolute right-0 top-[40px] z-[50] min-w-[160px] overflow-hidden rounded-[8px] border border-[var(--hairline)] bg-white shadow-lg">
+                    {iAmHost ? (
+                      <>
+                        {!closed && !matched && (
+                          <button
+                            type="button"
+                            onClick={handleCloseFunding}
+                            className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
+                          >
+                            모집 조기 마감
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteFunding()}
+                          className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--red)] hover:bg-[var(--hairline)]"
+                        >
+                          펀딩 삭제
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={openReportFunding}
+                          className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
+                        >
+                          펀딩 신고
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openReportHost}
+                          className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--heading)] hover:bg-[var(--hairline)]"
+                        >
+                          개최자 신고
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleBlockHost}
+                          className="block w-full px-[14px] py-[12px] text-left text-[13px] text-[var(--red)] hover:bg-[var(--hairline)]"
+                        >
+                          {hostBlocked ? '이미 차단됨' : '개최자 차단'}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -316,7 +373,7 @@ export default function FundingTab() {
                 {current}명 참여 / 목표 {funding.targetCount}명
               </p>
               <p className="text-[13px] text-[var(--red)]">
-                {matched ? '모집 완료' : `마감 ${funding.deadlineText}`}
+                {closed ? '모집 마감' : matched ? '모집 완료' : `마감 ${funding.deadlineText}`}
               </p>
             </div>
             <div className="h-[9px] w-full overflow-hidden rounded-full bg-[var(--hairline)]">
@@ -327,13 +384,16 @@ export default function FundingTab() {
             </div>
             <div className="flex items-center">
               {funding.participants.slice(0, 4).map((email, i) => (
-                <div
+                <button
                   key={email}
+                  type="button"
+                  onClick={() => setProfileEmail(email)}
                   className="relative -mr-[9px] rounded-full border-2 border-white"
                   style={{ zIndex: 4 - i }}
+                  aria-label="참여자 프로필"
                 >
                   <UserAvatar user={getUser(email)} size={30} />
-                </div>
+                </button>
               ))}
               {current > 4 && (
                 <div className="relative z-[0] flex size-[30px] items-center justify-center rounded-full border-2 border-white bg-[#303441]">
@@ -365,6 +425,57 @@ export default function FundingTab() {
           </div>
 
           <div className="h-[4px]" />
+
+          {/* 성사 후 일정 확정 / 캘린더 */}
+          {matched && joined && (
+            <div className="mb-[8px] flex w-full flex-col gap-[10px] rounded-[4px] border border-[var(--primary-deep)] bg-[var(--primary-tint)] p-[15px]">
+              <p className="text-[15px] font-bold text-[var(--heading)]">
+                {funding.scheduleConfirmed ? '만남 일정 확정됨' : '만남 일정 잡기'}
+              </p>
+              <p className="text-[13px] text-[var(--label)]">
+                {funding.scheduleConfirmed
+                  ? `${funding.meetTimeText || '시간 확인'} · ${funding.locationName || '장소 확인'}`
+                  : '성사된 모임의 시간과 장소를 확정하고 캘린더에 추가하세요.'}
+              </p>
+              <div className="flex flex-wrap gap-[8px]">
+                {iAmHost && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSchedule(true)}
+                    className="rounded-[4px] bg-[var(--primary-deep)] px-[12px] py-[8px] text-[12px] font-bold text-white"
+                  >
+                    {funding.scheduleConfirmed ? '일정 수정' : '일정 확정'}
+                  </button>
+                )}
+                {funding.meetAt && calendarUrl && (
+                  <a
+                    href={calendarUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-[4px] border border-[var(--primary-deep)] px-[12px] py-[8px] text-[12px] font-bold text-[var(--primary-deep)]"
+                  >
+                    Google 캘린더
+                  </a>
+                )}
+                {funding.meetAt && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      downloadIcs({
+                        title: `[명랑회] ${funding.title}`,
+                        description: funding.description,
+                        location: funding.locationName,
+                        start: funding.meetAt,
+                      })
+                    }
+                    className="rounded-[4px] border border-[var(--border-card)] px-[12px] py-[8px] text-[12px] font-medium text-[var(--heading)]"
+                  >
+                    .ics 저장
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex w-full items-start gap-[11px] rounded-[4px] bg-[var(--blue-tint)] p-[15px]">
             <img src={aiIcon} alt="" className="size-[19px] shrink-0" />
@@ -436,12 +547,18 @@ export default function FundingTab() {
                   key={`${c.fundingId}-${c.id}`}
                   className={`flex items-start gap-[9px] ${c.parentId ? 'ml-[28px]' : ''}`}
                 >
-                  <UserAvatar user={author} size={30} />
+                  <button type="button" onClick={() => setProfileEmail(c.authorEmail)} aria-label="프로필">
+                    <UserAvatar user={author} size={30} />
+                  </button>
                   <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
                     <div className="flex items-center justify-between gap-[8px]">
-                      <p className="text-[14px] font-bold text-[var(--heading)]">
+                      <button
+                        type="button"
+                        onClick={() => setProfileEmail(c.authorEmail)}
+                        className="text-[14px] font-bold text-[var(--heading)]"
+                      >
                         {author?.name ?? '알 수 없음'}
-                      </p>
+                      </button>
                       {mine && (
                         <button
                           type="button"
@@ -534,11 +651,17 @@ export default function FundingTab() {
             <button
               type="button"
               onClick={handleJoin}
-              disabled={matched || expired}
+              disabled={!joinable}
               className="flex h-[56px] flex-1 items-center justify-center rounded-[4px] bg-[var(--primary)] disabled:opacity-40"
             >
               <span className="text-[17px] font-medium text-[var(--on-primary)]">
-                {matched ? '모집이 마감됐어요' : expired ? '모집 기간이 지났어요' : '펀딩 참여하기'}
+                {closed
+                  ? '호스트가 모집을 마감했어요'
+                  : matched
+                    ? '모집이 마감됐어요'
+                    : expired
+                      ? '모집 기간이 지났어요'
+                      : '펀딩 참여하기'}
               </span>
             </button>
           )}
@@ -558,6 +681,14 @@ export default function FundingTab() {
             handleBlockHost()
           }}
         />
+      )}
+
+      {profileEmail && (
+        <UserProfileSheet email={profileEmail} onClose={() => setProfileEmail(null)} />
+      )}
+
+      {showSchedule && (
+        <ScheduleConfirmModal funding={funding} onClose={() => setShowSchedule(false)} />
       )}
 
       {reportTarget && (

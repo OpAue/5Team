@@ -27,6 +27,8 @@ public record FundingResponse(
         String aiRisk,
         boolean best,
         boolean matched,
+        boolean closed,
+        boolean scheduleConfirmed,
         long createdAt,
         Double distanceKm
 ) {
@@ -58,6 +60,8 @@ public record FundingResponse(
                 f.getAiRisk(),
                 f.isBest(),
                 f.isMatched(),
+                f.isClosed(),
+                f.isScheduleConfirmed(),
                 f.getCreatedAt() == null ? 0L : f.getCreatedAt().toEpochMilli(),
                 distanceKm
         );

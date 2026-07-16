@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BackButton from '../../components/BackButton'
 import UserAvatar from '../../components/UserAvatar'
+import UserProfileSheet from '../../components/UserProfileSheet'
 import { useDB } from '../../store/db'
 import {
   chatMessagesOf,
@@ -26,6 +27,7 @@ export default function ChatRoom() {
   const messages = chatMessagesOf(funding.id)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [profileEmail, setProfileEmail] = useState<string | null>(null)
   const listRef = useRef<HTMLElement | null>(null)
 
   // 2초 폴링 + 진입 시 즉시 동기화
@@ -151,11 +153,17 @@ export default function ChatRoom() {
           const author = getUser(m.authorEmail)
           return (
             <div key={`${m.fundingId}-${m.id}`} className="flex items-start gap-[8px]">
-              <UserAvatar user={author} size={32} />
+              <button type="button" onClick={() => setProfileEmail(m.authorEmail)} aria-label="프로필">
+                <UserAvatar user={author} size={32} />
+              </button>
               <div className="flex flex-col items-start gap-[4px]">
-                <p className="text-[13px] font-bold text-[var(--heading)]">
+                <button
+                  type="button"
+                  onClick={() => setProfileEmail(m.authorEmail)}
+                  className="text-[13px] font-bold text-[var(--heading)]"
+                >
                   {author?.name ?? '알 수 없음'}
-                </p>
+                </button>
                 <div className="flex items-end gap-[6px]">
                   <div className="max-w-[220px] rounded-[12px] bg-[var(--hairline)] px-[14px] py-[10px]">
                     <p className="text-[14px] text-[var(--heading)]">{m.content}</p>
@@ -188,6 +196,10 @@ export default function ChatRoom() {
           <span className="text-[16px] text-white">{sending ? '…' : '↑'}</span>
         </button>
       </div>
+
+      {profileEmail && (
+        <UserProfileSheet email={profileEmail} onClose={() => setProfileEmail(null)} />
+      )}
     </div>
   )
 }

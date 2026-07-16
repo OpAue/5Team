@@ -44,6 +44,8 @@ export type ApiFunding = {
   aiRisk: string
   best: boolean
   matched: boolean
+  closed?: boolean
+  scheduleConfirmed?: boolean
   createdAt: number
   distanceKm?: number | null
 }
@@ -323,6 +325,62 @@ export async function confirmFundingApi(fundingId: number): Promise<ApiFunding> 
   const { response, payload } = await request(`/api/fundings/${fundingId}/confirm`, { method: 'POST' })
   if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '모집 확정에 실패했어요.'))
   return payload.funding as ApiFunding
+}
+
+export async function closeFundingApi(fundingId: number): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/close`, { method: 'POST' })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '모집 마감에 실패했어요.'))
+  return payload.funding as ApiFunding
+}
+
+export async function deleteFundingApi(fundingId: number): Promise<void> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}`, { method: 'DELETE' })
+  if (!response.ok) throw new Error(errorMessage(payload, '펀딩 삭제에 실패했어요.'))
+}
+
+export async function confirmScheduleApi(
+  fundingId: number,
+  body: {
+    meetAt?: string
+    meetTimeText?: string
+    locationName?: string
+    address?: string
+    lat?: number
+    lng?: number
+  },
+): Promise<ApiFunding> {
+  const { response, payload } = await request(`/api/fundings/${fundingId}/schedule`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+  if (!response.ok || !payload?.funding) throw new Error(errorMessage(payload, '일정 확정에 실패했어요.'))
+  return payload.funding as ApiFunding
+}
+
+/** 이미지 파일 업로드 → 서버 경로 (/uploads/...) 반환. 절대 URL로 변환 */
+export async function uploadImageApi(file: File): Promise<string> {
+  const token = getAccessToken()
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`${API_BASE_URL}/api/files/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  })
+  const payload = await parseJson(response)
+  if (!response.ok || typeof payload?.url !== 'string') {
+    throw new Error(errorMessage(payload, '이미지 업로드에 실패했어요.'))
+  }
+  const url = payload.url as string
+  if (url.startsWith('http')) return url
+  return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`
+}
+
+/** 상대 업로드 경로를 절대 URL로 */
+export function resolveMediaUrl(url?: string | null): string | undefined {
+  if (!url) return undefined
+  if (url.startsWith('http') || url.startsWith('data:')) return url
+  return `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`
 }
 
 export async function fetchNudge(fundingId: number): Promise<string> {

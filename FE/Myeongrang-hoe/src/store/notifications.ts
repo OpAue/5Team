@@ -16,7 +16,21 @@ export interface NotificationItem {
   /** 정렬 가중치 (높을수록 상단). 찜 성사임박 등이 우선 */
   priority?: number
   /** 알림 종류 (토스트 구분용) */
-  kind?: 'wishlist-almost' | 'almost' | 'chat' | 'comment' | 'review'
+  kind?:
+    | 'wishlist-almost'
+    | 'almost'
+    | 'chat'
+    | 'comment'
+    | 'review'
+    | 'meet-today'
+    | 'review-remind'
+    | 'schedule'
+}
+
+function startOfDay(ts: number) {
+  const d = new Date(ts)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
 }
 
 export function computeNotifications(email: string): NotificationItem[] {
@@ -27,12 +41,15 @@ export function computeNotifications(email: string): NotificationItem[] {
   const items: NotificationItem[] = []
   const myLocation = { lat: me.lastLat ?? CAMPUS_CENTER.lat, lng: me.lastLng ?? CAMPUS_CENTER.lng }
   const myWishlist = db.wishlist[email] ?? []
+  const now = Date.now()
+  const today0 = startOfDay(now)
 
   for (const f of db.fundings) {
     const current = currentCountOf(f)
-    const almostThere = !isMatched(f) && f.targetCount - current === 1
+    const almostThere = !isMatched(f) && !f.closed && f.targetCount - current === 1
     const participant = f.participants.includes(email)
     const wished = myWishlist.includes(f.id)
+    const meetMs = f.meetAt ? new Date(f.meetAt).getTime() : NaN
 
     if (participant) {
       if (almostThere) {
@@ -58,6 +75,50 @@ export function computeNotifications(email: string): NotificationItem[] {
           priority: 40,
           kind: 'chat',
         })
+
+        if (f.scheduleConfirmed) {
+          items.push({
+            id: `schedule-${f.id}`,
+            icon: chatNoteIcon,
+            title: '만남 일정이 확정됐어요',
+            body: `"${f.title}" · ${f.meetTimeText || '시간 확인'} · ${f.locationName || '장소 확인'}`,
+            createdAt: f.createdAt + 1,
+            to: `/funding/${f.id}`,
+            priority: 75,
+            kind: 'schedule',
+          })
+        }
+
+        // 만남 당일 리마인드
+        if (!Number.isNaN(meetMs) && startOfDay(meetMs) === today0 && meetMs >= now - 2 * 60 * 60 * 1000) {
+          items.push({
+            id: `meet-today-${f.id}`,
+            icon: nudgeIcon,
+            title: '오늘 만남이 있어요!',
+            body: `"${f.title}" · ${f.meetTimeText || ''} · ${f.locationName || ''}`.trim(),
+            createdAt: now,
+            to: `/funding/${f.id}`,
+            priority: 95,
+            kind: 'meet-today',
+          })
+        }
+
+        // 만남 이후 후기 리마인드 (아직 내가 쓴 후기 없음)
+        if (!Number.isNaN(meetMs) && meetMs < now) {
+          const wrote = db.reviews.some((r) => r.fundingId === f.id && r.writerEmail === email)
+          if (!wrote) {
+            items.push({
+              id: `review-remind-${f.id}`,
+              icon: aiIcon,
+              title: '후기를 남겨 햇살지수를 쌓아보세요',
+              body: `"${f.title}" 모임은 어떠셨나요? 참여자에게 후기를 남겨주세요.`,
+              createdAt: meetMs + 1,
+              to: `/review/new/${f.id}`,
+              priority: 85,
+              kind: 'review-remind',
+            })
+          }
+        }
       }
       if (f.hostEmail === email) {
         for (const c of commentsOf(f.id).filter((c) => c.authorEmail !== email).slice(-3)) {
@@ -75,7 +136,6 @@ export function computeNotifications(email: string): NotificationItem[] {
         }
       }
     } else if (almostThere) {
-      // 참여하지 않은 사용자: 찜 > 관심사 > 주변 순으로 성사 임박 알림
       const nearby = distanceKm(myLocation, { lat: f.lat, lng: f.lng }) <= NUDGE_RADIUS_KM
       const interested = me.interests.includes(f.category)
       if (wished || nearby || interested) {
@@ -123,6 +183,17 @@ export function computeNotifications(email: string): NotificationItem[] {
 /** 찜 펀딩 중 성사 임박(1명 남음) 목록 — 홈 토스트용 */
 export function wishlistAlmostFullItems(email: string): NotificationItem[] {
   return computeNotifications(email).filter((n) => n.kind === 'wishlist-almost')
+}
+
+/** 브라우저 푸시 대상 알림 */
+export function pushableNotifications(email: string): NotificationItem[] {
+  return computeNotifications(email).filter(
+    (n) =>
+      n.kind === 'wishlist-almost' ||
+      n.kind === 'meet-today' ||
+      n.kind === 'review-remind' ||
+      n.kind === 'schedule',
+  )
 }
 
 export function hasUnreadNotifications(email: string): boolean {

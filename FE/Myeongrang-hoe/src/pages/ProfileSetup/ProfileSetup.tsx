@@ -6,6 +6,7 @@ import { getCurrentUser, updateProfile } from '../../store/actions'
 import { showToast } from '../../store/ui'
 import { patchDraft } from '../../store/signupDraft'
 import type { Campus } from '../../store/schema'
+import { getAccessToken, uploadImageApi } from '../../lib/api'
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
 
@@ -22,7 +23,7 @@ export default function ProfileSetup({ mode = 'signup' }: { mode?: 'signup' | 'e
   const [avatarImage, setAvatarImage] = useState(editingUser?.avatarImage ?? '')
   const [saving, setSaving] = useState(false)
 
-  function handlePickImage(file: File | null) {
+  async function handlePickImage(file: File | null) {
     if (!file) return
     if (!file.type.startsWith('image/')) {
       showToast('이미지 파일만 올릴 수 있어요', 'error')
@@ -32,6 +33,18 @@ export default function ProfileSetup({ mode = 'signup' }: { mode?: 'signup' | 'e
       showToast('프로필 사진은 2MB 이하로 올려주세요', 'error')
       return
     }
+
+    if (getAccessToken()) {
+      try {
+        const url = await uploadImageApi(file)
+        setAvatarImage(url)
+        showToast('프로필 사진을 서버에 올렸어요', 'success')
+        return
+      } catch {
+        showToast('서버 업로드 실패, 로컬 미리보기로 저장해요', 'info')
+      }
+    }
+
     const reader = new FileReader()
     reader.onload = () => {
       const result = typeof reader.result === 'string' ? reader.result : ''

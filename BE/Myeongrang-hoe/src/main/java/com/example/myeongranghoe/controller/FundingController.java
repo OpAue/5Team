@@ -98,6 +98,36 @@ public class FundingController {
         ));
     }
 
+    @PostMapping("/{id}/close")
+    public ResponseEntity<Map<String, Object>> close(@PathVariable Long id) {
+        String email = UserContext.require();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "모집을 마감했어요.",
+                "funding", fundingService.close(id, email)
+        ));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> delete(@PathVariable Long id) {
+        String email = UserContext.require();
+        fundingService.delete(id, email);
+        return ResponseEntity.ok(Map.of("success", true, "message", "펀딩을 삭제했어요."));
+    }
+
+    @PostMapping("/{id}/schedule")
+    public ResponseEntity<Map<String, Object>> confirmSchedule(
+            @PathVariable Long id,
+            @Valid @RequestBody ScheduleBody body
+    ) {
+        String email = UserContext.require();
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "만남 일정을 확정했어요.",
+                "funding", fundingService.confirmSchedule(id, email, body.toCommand())
+        ));
+    }
+
     @GetMapping("/{id}/nudge")
     public ResponseEntity<Map<String, Object>> nudge(@PathVariable Long id) {
         return ResponseEntity.ok(Map.of(
@@ -233,4 +263,19 @@ public class FundingController {
             String content,
             Boolean noShow
     ) {}
+
+    public record ScheduleBody(
+            String meetAt,
+            String meetTimeText,
+            String locationName,
+            String address,
+            Double lat,
+            Double lng
+    ) {
+        FundingService.ScheduleCommand toCommand() {
+            return new FundingService.ScheduleCommand(
+                    meetAt, meetTimeText, locationName, address, lat, lng
+            );
+        }
+    }
 }
