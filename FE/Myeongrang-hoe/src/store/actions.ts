@@ -10,6 +10,7 @@ import {
   fetchComments,
   fetchFunding,
   fetchFundings,
+  fetchNudge,
   fetchFundingReviews,
   fetchMe,
   fetchUserProfile,
@@ -372,6 +373,21 @@ export async function syncFundingsFromServer(params?: { lat?: number; lng?: numb
     const emails = new Set<string>()
     list.forEach((f) => f.participants?.forEach((e) => emails.add(e)))
     await Promise.all([...emails].map((e) => ensureUserCached(e)))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 서버(RiskAnalysisService)가 생성한 성사 임박 넛지 문구를 받아와 캐시한다 */
+export async function syncNudgeMessage(fundingId: number) {
+  try {
+    const message = await fetchNudge(fundingId)
+    if (!message) return false
+    mutate((d) => {
+      const f = d.fundings.find((x) => x.id === fundingId)
+      if (f) f.nudgeMessage = message
+    })
     return true
   } catch {
     return false

@@ -68,7 +68,7 @@ export default function ScheduleConfirmModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[170] flex items-end justify-center bg-black/40 sm:items-center">
+    <div className="fixed inset-0 z-[170] flex items-end justify-center bg-black/70 sm:items-center">
       <div className="w-full max-w-[402px] rounded-t-[12px] bg-white px-[20px] pb-[24px] pt-[16px] shadow-xl sm:rounded-[12px]">
         <div className="mb-[12px] flex items-center justify-between">
           <p className="text-[17px] font-bold text-[var(--heading)]">만남 일정 확정</p>

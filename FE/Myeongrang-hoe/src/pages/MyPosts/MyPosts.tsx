@@ -90,16 +90,18 @@ export default function MyPosts() {
             )
           })}
         </div>
-
-        <button
-          type="button"
-          onClick={() => navigate('/funding/new')}
-          className="absolute bottom-[24px] right-[16px] flex size-[56px] items-center justify-center rounded-full bg-[var(--primary)] shadow-[0px_4px_12px_rgba(39,119,231,0.35)]"
-          aria-label="펀딩 만들기"
-        >
-          <span className="text-[32px] font-light leading-none text-white">+</span>
-        </button>
       </main>
+
+      <button
+        type="button"
+        onClick={() => navigate('/funding/new')}
+        className="absolute bottom-[101px] right-[16px] flex size-[56px] items-center justify-center rounded-full bg-[var(--primary)] shadow-[0px_4px_12px_rgba(39,119,231,0.35)]"
+        aria-label="펀딩 만들기"
+      >
+        <svg viewBox="0 0 24 24" fill="none" className="size-[26px]">
+          <path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
+        </svg>
+      </button>
 
       <BottomNav active="myposts" />
     </div>

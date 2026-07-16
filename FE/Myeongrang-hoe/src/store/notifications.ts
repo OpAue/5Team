@@ -57,7 +57,7 @@ export function computeNotifications(email: string): NotificationItem[] {
           id: `nudge-mine-${f.id}`,
           icon: nudgeIcon,
           title: wished ? '찜·참여 중인 펀딩이 성사 임박!' : '딱 한 명만 더 모이면 출발해요!',
-          body: `"${f.title}"가 목표 인원 1명만 남았어요. (${current}/${f.targetCount})`,
+          body: f.nudgeMessage || `"${f.title}"가 목표 인원 1명만 남았어요. (${current}/${f.targetCount})`,
           createdAt: f.createdAt,
           to: `/funding/${f.id}`,
           priority: wished ? 100 : 80,
@@ -148,7 +148,9 @@ export function computeNotifications(email: string): NotificationItem[] {
           id: `nudge-broadcast-${f.id}`,
           icon: nudgeIcon,
           title: wished ? '찜한 펀딩이 성사 임박!' : '딱 한 명만 더 모이면 출발해요!',
-          body: `${reason} "${f.title}"가 목표 인원 1명만 남았어요. (${current}/${f.targetCount})`,
+          body: f.nudgeMessage
+            ? `${reason} · ${f.nudgeMessage}`
+            : `${reason} "${f.title}"가 목표 인원 1명만 남았어요. (${current}/${f.targetCount})`,
           createdAt: f.createdAt,
           to: `/funding/${f.id}`,
           priority: wished ? 100 : interested ? 70 : 50,

@@ -9,7 +9,15 @@ export default function BackButton({ onClick }: { onClick: () => void }) {
       className="relative flex size-[39px] shrink-0 items-center justify-center"
     >
       <img src={backBtn} alt="" className="absolute inset-0 size-full" />
-      <span className="relative text-[21px] font-bold text-[var(--heading)]">‹</span>
+      <svg viewBox="0 0 24 24" fill="none" className="relative size-[18px]">
+        <path
+          d="M15 5l-7 7 7 7"
+          stroke="var(--heading)"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
     </button>
   )
 }

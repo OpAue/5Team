@@ -19,7 +19,7 @@ export default function UserProfileSheet({
 
   if (!user) {
     return (
-      <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40 sm:items-center">
+      <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/70 sm:items-center">
         <div className="w-full max-w-[402px] rounded-t-[16px] bg-white p-[20px] sm:rounded-[16px]">
           <p className="text-[15px] text-[var(--label)]">프로필을 불러올 수 없어요</p>
           <button
@@ -41,7 +41,7 @@ export default function UserProfileSheet({
   ]
 
   return (
-    <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/40">
+    <div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/70">
       <div className="flex max-h-[85vh] w-full max-w-[402px] flex-col overflow-y-auto rounded-t-[24px] bg-white shadow-[0px_-4px_20px_rgba(0,0,0,0.15)]">
         <div className="flex h-[20px] w-full shrink-0 items-center justify-center">
           <div className="h-[4px] w-[36px] rounded-full bg-[var(--border)]" />

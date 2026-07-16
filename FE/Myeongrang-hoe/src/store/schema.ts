@@ -85,6 +85,8 @@ export interface FundingRecord {
   closed?: boolean
   /** 성사 후 일정 확정 */
   scheduleConfirmed?: boolean
+  /** 서버(Claude 대체 규칙 기반)가 생성한 성사 임박 넛지 문구 캐시 */
+  nudgeMessage?: string
   createdAt: number
 }
 

@@ -13,10 +13,12 @@ import {
   currentCountOf,
   getCurrentUser,
   getUser,
+  isClosed,
   isExpired,
   participantNamesOf,
   syncFundingsFromServer,
   syncMeFromServer,
+  syncNudgeMessage,
   updateLastLocation,
 } from '../../store/actions'
 import { distanceKm, type LatLng } from '../../lib/geo'
@@ -30,12 +32,11 @@ import type { FundingRecord } from '../../store/schema'
 
 const MAP_HEIGHT = 343
 
-type RadiusMode = '1' | '3' | 'campus' | 'all'
+type RadiusMode = '1' | '3' | 'all'
 
 const RADIUS_OPTIONS: { key: RadiusMode; label: string; km: number }[] = [
   { key: '1', label: '1km', km: 1 },
   { key: '3', label: '3km', km: 3 },
-  { key: 'campus', label: '캠퍼스', km: 1.5 },
   { key: 'all', label: '전체', km: 100 },
 ]
 
@@ -129,16 +130,15 @@ export default function Home() {
 
   const center = myLocation ?? CAMPUS_CENTER
   const radiusKm = RADIUS_OPTIONS.find((r) => r.key === radiusMode)?.km ?? 3
-  const radiusCenter = radiusMode === 'campus' ? CAMPUS_CENTER : center
 
   const sorted = useMemo(() => {
     return filterBlockedFundingHost(db.fundings)
       .map((f) => ({
         ...f,
-        distanceKm: distanceKm(radiusCenter, { lat: f.lat, lng: f.lng }),
+        distanceKm: distanceKm(center, { lat: f.lat, lng: f.lng }),
       }))
       .sort((a, b) => a.distanceKm - b.distanceKm)
-  }, [radiusCenter.lat, radiusCenter.lng, db.fundings])
+  }, [center.lat, center.lng, db.fundings])
 
   const nearbyFundings = useMemo(() => {
     if (radiusMode === 'all') return sorted
@@ -168,6 +168,8 @@ export default function Home() {
     const pts = nearbyFundings.length > 0 ? nearbyFundings : sorted
     pts.slice(0, 40).forEach((f) => bounds.extend(new kakao.maps.LatLng(f.lat, f.lng)))
     mapInstance.setBounds(bounds, 80, 40, 40, 40)
+    // setBounds는 마커를 모두 포함하도록 중심을 옮길 수 있어, 사용자 위치가 항상 중앙에 오도록 다시 맞춘다
+    mapInstance.setCenter(new kakao.maps.LatLng(center.lat, center.lng))
   }, [nearbyFundings, sorted, center, kakaoLoading, kakaoError, mapInstance, radiusMode])
 
   useEffect(() => {
@@ -210,6 +212,13 @@ export default function Home() {
   }
 
   const almostThere = nearbyFundings.find((f) => f.targetCount - currentCountOf(f) === 1)
+
+  // 성사 임박 문구는 서버(RiskAnalysisService)가 생성한 걸 우선 쓴다
+  useEffect(() => {
+    if (!almostThere || almostThere.nudgeMessage) return
+    void syncNudgeMessage(almostThere.id)
+  }, [almostThere?.id, almostThere?.nudgeMessage])
+
   const selected = sorted.find((f) => f.id === selectedId)
   const showSdkLoading = kakaoLoading
   const showMapError = !kakaoLoading && !!kakaoError
@@ -435,9 +444,7 @@ export default function Home() {
             <p className="text-[12px] text-[var(--label)]">
               {radiusMode === 'all'
                 ? '전체 펀딩을 가까운 순으로 보여줍니다.'
-                : radiusMode === 'campus'
-                  ? '명지대 인문캠퍼스 기준 1.5km 이내'
-                  : `기준 위치 ${radiusKm}km 이내 · 가까운 순`}
+                : `기준 위치 ${radiusKm}km 이내 · 가까운 순`}
             </p>
           </div>
 
@@ -445,7 +452,8 @@ export default function Home() {
             <div className="flex items-center gap-[11px] rounded-[4px] border border-[var(--primary-deep)] bg-[var(--primary-tint)] px-[15px] py-[13px]">
               <img src={nudgeIcon} alt="" className="size-[21px] shrink-0" />
               <p className="flex-1 text-[14px] font-bold text-[var(--heading)]">
-                딱 한 명만 더 모이면 &quot;{almostThere.title}&quot;가 바로 출발해요!
+                {almostThere.nudgeMessage ??
+                  `딱 한 명만 더 모이면 "${almostThere.title}"가 바로 출발해요!`}
               </p>
             </div>
           )}
@@ -482,7 +490,7 @@ export default function Home() {
                       ? `${current}/${g.targetCount}명 · 목표 달성 임박`
                       : `${current}/${g.targetCount}명 참여`,
                   best: g.best,
-                  expired: isExpired(g),
+                  expired: isExpired(g) || isClosed(g),
                   coverImage: g.coverImage,
                   lat: g.lat,
                   lng: g.lng,

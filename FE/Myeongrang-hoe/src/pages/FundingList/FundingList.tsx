@@ -6,6 +6,7 @@ import { useDB } from '../../store/db'
 import {
   currentCountOf,
   getUser,
+  isClosed,
   isExpired,
   isMatched,
   participantNamesOf,
@@ -19,7 +20,7 @@ const CATEGORIES = ['전체', '맛집', '교류', '산책', '스터디', '스포
 type CategoryFilter = (typeof CATEGORIES)[number]
 type SortKey = 'latest' | 'almost' | 'nearby' | 'popular'
 type DateFilter = 'all' | 'today' | 'week'
-type RadiusFilter = 'all' | '1' | '3' | 'campus'
+type RadiusFilter = 'all' | '1' | '3'
 
 function normalize(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, '')
@@ -71,7 +72,7 @@ export default function FundingList() {
     if (category !== '전체') {
       list = list.filter((g) => g.category === category)
     }
-    if (hideExpired) list = list.filter((g) => !isExpired(g))
+    if (hideExpired) list = list.filter((g) => !isExpired(g) && !isClosed(g))
     if (hideMatched) list = list.filter((g) => !isMatched(g))
     if (freeOnly) list = list.filter((g) => (g.fee ?? 0) === 0)
 
@@ -90,8 +91,7 @@ export default function FundingList() {
     }
 
     // 거리
-    const radiusKm =
-      radiusFilter === '1' ? 1 : radiusFilter === '3' ? 3 : radiusFilter === 'campus' ? 1.5 : null
+    const radiusKm = radiusFilter === '1' ? 1 : radiusFilter === '3' ? 3 : null
     if (radiusKm != null) {
       list = list.filter(
         (g) => distanceKm(CAMPUS_CENTER, { lat: g.lat, lng: g.lng }) <= radiusKm,
@@ -194,11 +194,12 @@ export default function FundingList() {
             </div>
           </div>
 
-          {/* 날짜 · 요금 · 거리 */}
+          {/* 날짜 · 요금 */}
           <div className="flex flex-wrap items-center gap-[8px]">
+            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">날짜</span>
             {(
               [
-                { key: 'all' as const, label: '날짜 전체' },
+                { key: 'all' as const, label: '전체' },
                 { key: 'today' as const, label: '오늘' },
                 { key: 'week' as const, label: '이번 주' },
               ] as const
@@ -216,6 +217,7 @@ export default function FundingList() {
                 {d.label}
               </button>
             ))}
+            <span className="mx-[2px] h-[14px] w-px shrink-0 bg-[var(--hairline)]" />
             <button
               type="button"
               onClick={() => setFreeOnly((v) => !v)}
@@ -227,12 +229,16 @@ export default function FundingList() {
             >
               무료만
             </button>
+          </div>
+
+          {/* 거리 */}
+          <div className="flex flex-wrap items-center gap-[8px]">
+            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">거리</span>
             {(
               [
-                { key: 'all' as const, label: '거리∞' },
+                { key: 'all' as const, label: '전체' },
                 { key: '1' as const, label: '1km' },
                 { key: '3' as const, label: '3km' },
-                { key: 'campus' as const, label: '캠퍼스' },
               ] as const
             ).map((r) => (
               <button
@@ -250,7 +256,9 @@ export default function FundingList() {
             ))}
           </div>
 
+          {/* 정렬 */}
           <div className="flex flex-wrap items-center gap-[8px]">
+            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">정렬</span>
             {(
               [
                 { key: 'latest' as const, label: '최신' },
@@ -272,6 +280,11 @@ export default function FundingList() {
                 {s.label}
               </button>
             ))}
+          </div>
+
+          {/* 상태 */}
+          <div className="flex flex-wrap items-center gap-[8px]">
+            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">상태</span>
             <button
               type="button"
               onClick={() => setHideExpired((v) => !v)}
@@ -333,7 +346,7 @@ export default function FundingList() {
                     ? `${current}/${g.targetCount}명 · 목표 달성 임박`
                     : `${current}/${g.targetCount}명 참여${g.fee === 0 ? ' · 무료' : ''}`,
                 best: g.best,
-                expired: isExpired(g),
+                expired: isExpired(g) || isClosed(g),
                 coverImage: g.coverImage,
                 lat: g.lat,
                 lng: g.lng,
