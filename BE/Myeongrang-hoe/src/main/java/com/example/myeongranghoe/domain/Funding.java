@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -71,6 +72,11 @@ public class Funding {
 
     @Column(nullable = false, length = 2000)
     private String description = "";
+
+    /** 커버 이미지 (data URL 등). 클라이언트에서 2MB 제한. */
+    @Lob
+    @Column(name = "cover_image")
+    private String coverImage;
 
     @Column(name = "host_email", nullable = false, length = 190)
     private String hostEmail;
@@ -228,6 +234,14 @@ public class Funding {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getCoverImage() {
+        return coverImage;
+    }
+
+    public void setCoverImage(String coverImage) {
+        this.coverImage = coverImage;
     }
 
     public String getHostEmail() {

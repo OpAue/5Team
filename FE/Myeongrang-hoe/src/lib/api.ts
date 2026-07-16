@@ -38,6 +38,7 @@ export type ApiFunding = {
   participants: string[]
   currentCount: number
   description: string
+  coverImage?: string
   hostEmail: string
   aiRisk: string
   best: boolean
@@ -88,6 +89,7 @@ export type FundingInputBody = {
   deadlineText: string
   targetCount: number
   fee: number
+  coverImage?: string
 }
 
 export function getAccessToken(): string | null {

@@ -309,6 +309,7 @@ function mapApiFunding(f: ApiFunding): FundingRecord {
     fillerParticipants: f.fillerParticipants,
     participants: f.participants ?? [],
     description: f.description,
+    coverImage: f.coverImage || undefined,
     hostEmail: f.hostEmail,
     aiRisk: risk,
     best: f.best,
@@ -514,6 +515,7 @@ interface FundingInput {
   deadlineText: string
   targetCount: number
   fee: number
+  coverImage?: string
 }
 
 function toFundingBody(input: FundingInput): FundingInputBody {
@@ -531,6 +533,7 @@ function toFundingBody(input: FundingInput): FundingInputBody {
     deadlineText: input.deadlineText,
     targetCount: input.targetCount,
     fee: input.fee,
+    coverImage: input.coverImage ?? '',
   }
 }
 
@@ -574,6 +577,7 @@ export async function createFundingAsync(
       description: input.description,
       hostEmail: input.hostEmail,
       aiRisk: '낮음',
+      coverImage: input.coverImage,
       createdAt: Date.now(),
     })
     d.chatMessages.push({
@@ -612,6 +616,7 @@ export function createFunding(input: FundingInput & { hostEmail: string }): numb
       description: input.description,
       hostEmail: input.hostEmail,
       aiRisk: '낮음',
+      coverImage: input.coverImage,
       createdAt: Date.now(),
     })
   })
@@ -665,6 +670,9 @@ function updateFundingLocalOnly(fundingId: number, input: FundingInput) {
     f.deadlineText = input.deadlineText
     f.targetCount = Math.max(input.targetCount, minTarget)
     f.fee = input.fee
+    if (input.coverImage !== undefined) {
+      f.coverImage = input.coverImage || undefined
+    }
   })
 }
 
@@ -718,21 +726,51 @@ export function addComment(fundingId: number, email: string, content: string, pa
   }
 }
 
-export function sendChatMessage(fundingId: number, email: string, content: string) {
+/**
+ * 채팅 전송. 서버 모드에서는 낙관적 추가 없이 API 응답만 반영해 중복 표시를 막는다.
+ * @returns Promise — 전송 완료 시 resolve (실패 시 reject)
+ */
+export async function sendChatMessage(
+  fundingId: number,
+  email: string,
+  content: string,
+): Promise<void> {
+  const text = content.trim()
+  if (!text) return
+
+  if (getAccessToken()) {
+    try {
+      const msg = await sendChatApi(fundingId, text)
+      mutate((d) => {
+        // 동일 서버 id 가 이미 있으면 스킵 (폴링/재전송 레이스 방지)
+        const exists = d.chatMessages.some((m) => m.fundingId === fundingId && m.id === msg.id)
+        if (exists) return
+        d.chatMessages.push({
+          id: msg.id,
+          fundingId: msg.fundingId,
+          authorEmail: msg.authorEmail,
+          content: msg.content,
+          createdAt: msg.createdAt,
+        })
+        d.nextChatId = Math.max(d.nextChatId, msg.id + 1)
+      })
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : '메시지 전송에 실패했어요', 'error')
+      throw e
+    }
+    return
+  }
+
+  // 오프라인 로컬
   mutate((d) => {
     d.chatMessages.push({
       id: d.nextChatId++,
       fundingId,
       authorEmail: email,
-      content,
+      content: text,
       createdAt: Date.now(),
     })
   })
-  if (getAccessToken()) {
-    void sendChatApi(fundingId, content)
-      .then(() => syncChatFromServer(fundingId))
-      .catch(() => {})
-  }
 }
 
 export function submitReview(

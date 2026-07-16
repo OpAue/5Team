@@ -73,6 +73,8 @@ export interface FundingRecord {
   description: string
   hostEmail: string
   aiRisk: RiskLevel
+  /** data URL 또는 이미지 URL (선택, 최대 약 2MB) */
+  coverImage?: string
 
   best?: boolean
   createdAt: number

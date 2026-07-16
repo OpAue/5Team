@@ -9,9 +9,10 @@ import {
   syncFundingDetail,
   updateFundingAsync,
 } from '../../store/actions'
-import { setGlobalLoading } from '../../store/ui'
+import { setGlobalLoading, showToast } from '../../store/ui'
 
 const categories = ['맛집', '교류', '산책', '스터디', '스포츠', '봉사']
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024 // 2MB
 
 function pad(n: number): string {
   return String(n).padStart(2, '0')
@@ -132,11 +133,16 @@ export default function FundingForm() {
   const [headcount, setHeadcount] = useState(existing?.targetCount ?? 4)
   const [deadline, setDeadline] = useState(existing ? isoToDatetimeLocalInput(existing.deadlineAt) : '')
   const [fee, setFee] = useState(existing?.fee ?? 0)
+  const [coverImage, setCoverImage] = useState(existing?.coverImage ?? '')
 
   const minHeadcount = existing ? Math.max(2, existing.participants.length) : 2
 
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (existing?.coverImage) setCoverImage(existing.coverImage)
+  }, [existing?.id, existing?.coverImage])
 
   const canSubmit = !!me && title.trim().length > 0 && !!place?.name && !error && !submitting
 
@@ -153,6 +159,39 @@ export default function FundingForm() {
   function handleDeadlineChange(nextDeadline: string) {
     setDeadline(nextDeadline)
     setError(computeScheduleError(date, time, nextDeadline))
+  }
+
+  function handleImageChange(file: File | null) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      showToast('이미지 파일만 올릴 수 있어요', 'error')
+      return
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showToast('이미지는 2MB 이하만 올릴 수 있어요', 'error')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      if (!result) {
+        showToast('이미지를 읽지 못했어요', 'error')
+        return
+      }
+      // base64 팽창 후에도 대략 3MB 넘으면 거부
+      if (result.length > 3_000_000) {
+        showToast('이미지가 너무 커요. 2MB 이하로 올려주세요', 'error')
+        return
+      }
+      setCoverImage(result)
+      showToast('사진을 추가했어요', 'success')
+    }
+    reader.onerror = () => showToast('이미지를 읽지 못했어요', 'error')
+    reader.readAsDataURL(file)
+  }
+
+  function clearImage() {
+    setCoverImage('')
   }
 
   async function handleSubmit() {
@@ -176,6 +215,7 @@ export default function FundingForm() {
       deadlineText: formatDeadlineText(deadline),
       targetCount: headcount,
       fee,
+      coverImage,
     }
 
     setSubmitting(true)
@@ -213,13 +253,49 @@ export default function FundingForm() {
       </header>
 
       <main className="flex-1 overflow-y-auto px-[16px] pb-[24px]">
-        <label className="mt-[16px] flex h-[132px] w-full cursor-pointer flex-col items-center justify-center gap-[8px] rounded-[4px] bg-[var(--hairline)]">
-          <input type="file" accept="image/*" className="hidden" />
-          <span className="flex size-[36px] items-center justify-center rounded-full bg-white text-[18px] text-[var(--label)]">
-            +
-          </span>
-          <span className="text-[13px] text-[var(--label)]">사진 추가</span>
-        </label>
+        {coverImage ? (
+          <div className="relative mt-[16px] h-[160px] w-full overflow-hidden rounded-[4px] bg-[var(--hairline)]">
+            <img src={coverImage} alt="펀딩 사진" className="h-full w-full object-cover" />
+            <div className="absolute right-[8px] top-[8px] flex gap-[6px]">
+              <label className="cursor-pointer rounded-[4px] bg-black/55 px-[10px] py-[6px] text-[12px] font-medium text-white">
+                변경
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleImageChange(e.target.files?.[0] ?? null)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={clearImage}
+                className="rounded-[4px] bg-black/55 px-[10px] py-[6px] text-[12px] font-medium text-white"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className="mt-[16px] flex h-[132px] w-full cursor-pointer flex-col items-center justify-center gap-[8px] rounded-[4px] bg-[var(--hairline)]">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={(e) => {
+                handleImageChange(e.target.files?.[0] ?? null)
+                e.target.value = ''
+              }}
+            />
+            <span className="flex size-[36px] items-center justify-center rounded-full bg-white text-[18px] text-[var(--label)]">
+              +
+            </span>
+            <span className="text-[13px] text-[var(--label)]">사진 추가</span>
+            <span className="text-[11px] text-[var(--border)]">JPG, PNG, WEBP · 최대 2MB</span>
+          </label>
+        )}
 
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">제목</p>
         <input

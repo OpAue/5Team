@@ -201,6 +201,15 @@ public class FundingService {
         funding.setDeadlineText(nullToEmpty(cmd.deadlineText()));
         funding.setTargetCount(cmd.targetCount());
         funding.setFee(Math.max(0, cmd.fee()));
+        // 빈 문자열이면 기존 이미지 유지(수정 시 null 만 명시 삭제로 쓸 수 있음) — 생성/수정 모두 전달값 반영
+        if (cmd.coverImage() != null) {
+            String img = cmd.coverImage().trim();
+            // 대략 2.8MB base64 상한 (원본 2MB 내외)
+            if (img.length() > 3_000_000) {
+                throw new IllegalArgumentException("이미지 용량이 너무 커요. 2MB 이하로 올려주세요.");
+            }
+            funding.setCoverImage(img.isEmpty() ? null : img);
+        }
     }
 
     private static String normalize(String email) {
@@ -224,6 +233,7 @@ public class FundingService {
             String deadlineAt,
             String deadlineText,
             int targetCount,
-            int fee
+            int fee,
+            String coverImage
     ) {}
 }

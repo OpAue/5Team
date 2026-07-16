@@ -186,7 +186,8 @@ public class FundingController {
             String deadlineAt,
             String deadlineText,
             @NotNull @Min(2) Integer targetCount,
-            Integer fee
+            Integer fee,
+            String coverImage
     ) {
         FundingService.FundingCommand toCommand() {
             return new FundingService.FundingCommand(
@@ -202,7 +203,8 @@ public class FundingController {
                     deadlineAt,
                     deadlineText,
                     targetCount,
-                    fee == null ? 0 : fee
+                    fee == null ? 0 : fee,
+                    coverImage
             );
         }
     }

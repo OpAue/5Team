@@ -133,10 +133,21 @@ export default function FundingTab() {
 
       <main className="flex-1 overflow-y-auto">
         <div
-          className="relative h-[236px] overflow-hidden"
-          style={{ backgroundImage: 'linear-gradient(149.6deg, #72abfa 0%, #2777e7 71.4%)' }}
+          className="relative h-[236px] overflow-hidden bg-[var(--hairline)]"
+          style={
+            funding.coverImage
+              ? undefined
+              : { backgroundImage: 'linear-gradient(149.6deg, #72abfa 0%, #2777e7 71.4%)' }
+          }
         >
-          <span className="absolute bottom-[18px] left-[17px] rounded-full bg-white px-[13px] py-[5px] text-[12px] font-bold text-[var(--red)]">
+          {funding.coverImage && (
+            <img
+              src={funding.coverImage}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
+          <span className="absolute bottom-[18px] left-[17px] z-[1] rounded-full bg-white px-[13px] py-[5px] text-[12px] font-bold text-[var(--red)]">
             {funding.best ? '인기 펀딩' : funding.category}
           </span>
         </div>

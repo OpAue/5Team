@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BackButton from '../../components/BackButton'
 import { useDB } from '../../store/db'
@@ -21,6 +21,8 @@ export default function ChatRoom() {
   const me = getCurrentUser()
   const messages = chatMessagesOf(funding.id)
   const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  const listRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const numId = Number(id)
@@ -33,11 +35,34 @@ export default function ChatRoom() {
     }
   }, [id])
 
-  function handleSend() {
+  useEffect(() => {
+    // 새 메시지 시 스크롤 하단
+    const el = listRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages.length])
+
+  async function handleSend() {
     const text = draft.trim()
-    if (!text || !me) return
-    sendChatMessage(funding.id, me.email, text)
+    if (!text || !me || sending) return
+
+    setSending(true)
     setDraft('')
+    try {
+      await sendChatMessage(funding.id, me.email, text)
+    } catch {
+      // 실패 시 입력 복구
+      setDraft(text)
+    } finally {
+      setSending(false)
+    }
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    // 한글 IME 조합 중 Enter / 키 반복 시 이중 전송 방지
+    if (e.key !== 'Enter') return
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+    e.preventDefault()
+    void handleSend()
   }
 
   return (
@@ -54,11 +79,14 @@ export default function ChatRoom() {
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col gap-[12px] overflow-y-auto px-[16px] py-[16px]">
+      <main
+        ref={listRef}
+        className="flex flex-1 flex-col gap-[12px] overflow-y-auto px-[16px] py-[16px]"
+      >
         {messages.map((m) => {
           if (m.authorEmail === 'system') {
             return (
-              <div key={m.id} className="flex justify-center">
+              <div key={`${m.fundingId}-${m.id}`} className="flex justify-center">
                 <span className="rounded-full bg-[var(--hairline)] px-[12px] py-[6px] text-[12px] text-[var(--label)]">
                   {m.content}
                 </span>
@@ -67,11 +95,14 @@ export default function ChatRoom() {
           }
 
           const isMe = m.authorEmail === me?.email
-          const time = new Date(m.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+          const time = new Date(m.createdAt).toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
 
           if (isMe) {
             return (
-              <div key={m.id} className="flex items-end justify-end gap-[6px]">
+              <div key={`${m.fundingId}-${m.id}`} className="flex items-end justify-end gap-[6px]">
                 <span className="text-[11px] text-[var(--border)]">{time}</span>
                 <div className="max-w-[240px] rounded-[12px] bg-[var(--primary)] px-[14px] py-[10px]">
                   <p className="text-[14px] text-white">{m.content}</p>
@@ -82,10 +113,12 @@ export default function ChatRoom() {
 
           const author = getUser(m.authorEmail)
           return (
-            <div key={m.id} className="flex items-start gap-[8px]">
+            <div key={`${m.fundingId}-${m.id}`} className="flex items-start gap-[8px]">
               <div className="size-[32px] shrink-0 rounded-full bg-[var(--hairline)]" />
               <div className="flex flex-col items-start gap-[4px]">
-                <p className="text-[13px] font-bold text-[var(--heading)]">{author?.name ?? '알 수 없음'}</p>
+                <p className="text-[13px] font-bold text-[var(--heading)]">
+                  {author?.name ?? '알 수 없음'}
+                </p>
                 <div className="flex items-end gap-[6px]">
                   <div className="max-w-[220px] rounded-[12px] bg-[var(--hairline)] px-[14px] py-[10px]">
                     <p className="text-[14px] text-[var(--heading)]">{m.content}</p>
@@ -103,17 +136,19 @@ export default function ChatRoom() {
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          onKeyDown={onKeyDown}
+          disabled={sending}
           placeholder="메시지를 입력하세요"
-          className="h-[37px] flex-1 rounded-full bg-[var(--hairline)] px-[16px] text-[14px] text-[var(--heading)] placeholder:text-[var(--label)] focus:outline-none"
+          className="h-[37px] flex-1 rounded-full bg-[var(--hairline)] px-[16px] text-[14px] text-[var(--heading)] placeholder:text-[var(--label)] focus:outline-none disabled:opacity-60"
         />
         <button
           type="button"
-          onClick={handleSend}
+          onClick={() => void handleSend()}
+          disabled={sending || !draft.trim()}
           aria-label="전송"
-          className="flex size-[40px] shrink-0 items-center justify-center rounded-full bg-[var(--primary)]"
+          className="flex size-[40px] shrink-0 items-center justify-center rounded-full bg-[var(--primary)] disabled:opacity-40"
         >
-          <span className="text-[16px] text-white">↑</span>
+          <span className="text-[16px] text-white">{sending ? '…' : '↑'}</span>
         </button>
       </div>
     </div>
