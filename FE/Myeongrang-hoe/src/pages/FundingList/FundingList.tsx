@@ -79,6 +79,7 @@ export default function FundingList() {
                   locationName: g.locationName,
                   progress: Math.round((current / g.targetCount) * 100),
                   participantNames: participantNamesOf(g),
+                  participantEmails: g.participants,
                   foot:
                     g.targetCount - current === 1
                       ? `${current}/${g.targetCount}명 · 목표 달성 임박`

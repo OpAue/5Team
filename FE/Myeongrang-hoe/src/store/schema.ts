@@ -14,6 +14,8 @@ export interface UserRecord {
   noShowCount: number
   participationCount: number
   loginable: boolean
+  /** 프로필 사진 data URL */
+  avatarImage?: string
   /** 마지막으로 확인된 위치 (홈 화면 접속 시 갱신, 넛지 알림 타겟팅에 사용) */
   lastLat?: number
   lastLng?: number

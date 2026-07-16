@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import locateBtn from '../../assets/home/locate-btn.svg'
 import { signupWithApi } from '../../lib/api'
-import { applyServerUser, signUp } from '../../store/actions'
+import { applyServerUser, signUp, updateProfile } from '../../store/actions'
 import { clearDraft, getDraft } from '../../store/signupDraft'
 
 export default function LocationPermission() {
@@ -41,12 +41,28 @@ export default function LocationPermission() {
         interests: draft.interests,
       })
       applyServerUser(user, { password, setCurrent: true })
+      // 가입 중 고른 프로필 사진 반영
+      try {
+        const avatar = sessionStorage.getItem('mh_signup_avatar')
+        if (avatar) {
+          updateProfile(email, { avatarImage: avatar })
+          sessionStorage.removeItem('mh_signup_avatar')
+        }
+      } catch {
+        // ignore
+      }
       clearDraft()
       navigate('/')
     } catch (err) {
       // Offline fallback keeps local demo usable if API is down
       const message = err instanceof Error ? err.message : '회원가입에 실패했어요.'
       if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+        let avatar = ''
+        try {
+          avatar = sessionStorage.getItem('mh_signup_avatar') ?? ''
+        } catch {
+          // ignore
+        }
         signUp({
           email,
           password,
@@ -57,6 +73,12 @@ export default function LocationPermission() {
           bio: draft.bio,
           interests: draft.interests,
         })
+        if (avatar) updateProfile(email, { avatarImage: avatar })
+        try {
+          sessionStorage.removeItem('mh_signup_avatar')
+        } catch {
+          // ignore
+        }
         clearDraft()
         navigate('/')
         return

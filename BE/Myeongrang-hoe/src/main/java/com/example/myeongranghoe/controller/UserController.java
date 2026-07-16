@@ -47,7 +47,8 @@ public class UserController {
                 body.age(),
                 body.bio(),
                 body.interests(),
-                body.notificationsSeenAt()
+                body.notificationsSeenAt(),
+                body.avatarImage()
         ));
         return ResponseEntity.ok(Map.of("success", true, "message", "프로필이 저장되었어요.", "user", user));
     }
@@ -84,7 +85,8 @@ public class UserController {
             String age,
             String bio,
             List<String> interests,
-            Long notificationsSeenAt
+            Long notificationsSeenAt,
+            String avatarImage
     ) {}
 
     public record LocationBody(Double lat, Double lng) {}

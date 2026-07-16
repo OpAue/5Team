@@ -145,6 +145,7 @@ export function applyServerUser(
     lastLat?: number | null
     lastLng?: number | null
     notificationsSeenAt?: number
+    avatarImage?: string | null
   },
   options?: { password?: string; setCurrent?: boolean },
 ) {
@@ -153,6 +154,10 @@ export function applyServerUser(
 
   mutate((d) => {
     const existing = d.users[user.email]
+    const avatar =
+      user.avatarImage !== undefined && user.avatarImage !== null
+        ? user.avatarImage || undefined
+        : existing?.avatarImage
     d.users[user.email] = {
       email: user.email,
       password: options?.password ?? existing?.password ?? '',
@@ -169,6 +174,7 @@ export function applyServerUser(
       notificationsSeenAt: user.notificationsSeenAt ?? existing?.notificationsSeenAt ?? 0,
       lastLat: user.lastLat ?? existing?.lastLat,
       lastLng: user.lastLng ?? existing?.lastLng,
+      avatarImage: avatar,
     }
     if (options?.setCurrent !== false) {
       d.currentUserEmail = user.email
@@ -251,7 +257,9 @@ export function signUp(input: {
 
 export function updateProfile(
   email: string,
-  patch: Partial<Pick<UserRecord, 'name' | 'campus' | 'major' | 'age' | 'bio' | 'interests'>>,
+  patch: Partial<
+    Pick<UserRecord, 'name' | 'campus' | 'major' | 'age' | 'bio' | 'interests' | 'avatarImage'>
+  >,
 ) {
   mutate((d) => {
     const user = d.users[email]
@@ -259,7 +267,14 @@ export function updateProfile(
     Object.assign(user, patch)
   })
   if (getAccessToken()) {
-    void updateProfileApi(patch).then((user) => applyServerUser(user, { setCurrent: false }))
+    void updateProfileApi({
+      ...patch,
+      avatarImage: patch.avatarImage ?? undefined,
+    })
+      .then((user) => applyServerUser(user, { setCurrent: false }))
+      .catch((e) => {
+        showToast(e instanceof Error ? e.message : '프로필 저장에 실패했어요', 'error')
+      })
   }
 }
 

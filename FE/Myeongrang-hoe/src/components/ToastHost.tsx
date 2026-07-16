@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { dismissToast, getUiState, subscribeUi } from '../store/ui'
+import LoadingScreen from './LoadingScreen'
 
 export default function ToastHost() {
   const ui = useSyncExternalStore(subscribeUi, getUiState, getUiState)
@@ -7,14 +8,10 @@ export default function ToastHost() {
   return (
     <>
       {ui.globalLoading && (
-        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-black/20">
-          <div className="rounded-[8px] bg-white px-[20px] py-[14px] shadow-lg">
-            <p className="text-[13px] font-medium text-[var(--heading)]">{ui.loadingMessage}</p>
-          </div>
-        </div>
+        <LoadingScreen message={ui.loadingMessage || '잠시만 기다려 주세요'} fullScreen />
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-[88px] z-[110] flex flex-col items-center gap-[8px] px-[16px]">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[88px] z-[210] flex flex-col items-center gap-[8px] px-[16px]">
         {ui.toasts.map((t) => (
           <button
             key={t.id}

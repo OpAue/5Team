@@ -3,6 +3,7 @@ import { getAccessToken, setAccessToken } from '../lib/api'
 import { isLoggedIn } from '../lib/auth'
 import { getCurrentUser, syncFundingsFromServer, syncMeFromServer } from '../store/actions'
 import { CAMPUS_CENTER } from '../store/schema'
+import LoadingScreen from './LoadingScreen'
 
 /**
  * 앱 기동 시 accessToken 이 있으면 서버에서 세션을 복구한다.
@@ -53,11 +54,7 @@ export default function AuthBootstrap({ children }: { children: ReactNode }) {
   }, [])
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <p className="text-[14px] text-[var(--label)]">로그인 상태를 확인하는 중...</p>
-      </div>
-    )
+    return <LoadingScreen message="로그인 상태를 확인하는 중..." />
   }
 
   return children

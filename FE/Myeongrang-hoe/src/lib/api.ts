@@ -18,6 +18,7 @@ export type ApiUser = {
   lastLat?: number | null
   lastLng?: number | null
   notificationsSeenAt?: number
+  avatarImage?: string
 }
 
 export type ApiFunding = {
@@ -234,6 +235,7 @@ export async function updateProfileApi(body: {
   bio?: string
   interests?: string[]
   notificationsSeenAt?: number
+  avatarImage?: string
 }): Promise<ApiUser> {
   const { response, payload } = await request('/api/users/me', {
     method: 'PATCH',

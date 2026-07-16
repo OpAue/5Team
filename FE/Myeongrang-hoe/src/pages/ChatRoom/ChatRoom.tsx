@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import BackButton from '../../components/BackButton'
+import UserAvatar from '../../components/UserAvatar'
 import { useDB } from '../../store/db'
 import {
   chatMessagesOf,
@@ -75,7 +76,7 @@ export default function ChatRoom() {
             <p className="truncate text-[16px] font-bold text-[var(--heading)]">{funding.title}</p>
             <p className="text-[12px] text-[var(--label)]">참여자 {currentCountOf(funding)}명</p>
           </div>
-          <div className="size-[36px] shrink-0 rounded-full bg-[var(--hairline)]" />
+          <UserAvatar user={me} size={36} />
         </div>
       </header>
 
@@ -114,7 +115,7 @@ export default function ChatRoom() {
           const author = getUser(m.authorEmail)
           return (
             <div key={`${m.fundingId}-${m.id}`} className="flex items-start gap-[8px]">
-              <div className="size-[32px] shrink-0 rounded-full bg-[var(--hairline)]" />
+              <UserAvatar user={author} size={32} />
               <div className="flex flex-col items-start gap-[4px]">
                 <p className="text-[13px] font-bold text-[var(--heading)]">
                   {author?.name ?? '알 수 없음'}

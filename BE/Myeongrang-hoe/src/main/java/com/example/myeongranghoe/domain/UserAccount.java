@@ -9,6 +9,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
@@ -46,6 +47,11 @@ public class UserAccount {
 
     @Column(nullable = false, length = 500)
     private String bio = "";
+
+    /** 프로필 사진 (data URL). 클라이언트에서 2MB 제한. */
+    @Lob
+    @Column(name = "avatar_image")
+    private String avatarImage;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_interests", joinColumns = @JoinColumn(name = "user_id"))
@@ -150,6 +156,14 @@ public class UserAccount {
 
     public void setBio(String bio) {
         this.bio = bio;
+    }
+
+    public String getAvatarImage() {
+        return avatarImage;
+    }
+
+    public void setAvatarImage(String avatarImage) {
+        this.avatarImage = avatarImage;
     }
 
     public List<String> getInterests() {

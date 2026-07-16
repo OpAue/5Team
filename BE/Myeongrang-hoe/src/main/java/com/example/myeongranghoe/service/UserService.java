@@ -116,6 +116,13 @@ public class UserService {
         if (patch.notificationsSeenAt() != null) {
             user.setNotificationsSeenAt(patch.notificationsSeenAt());
         }
+        if (patch.avatarImage() != null) {
+            String img = patch.avatarImage().trim();
+            if (img.length() > 3_000_000) {
+                throw new IllegalArgumentException("프로필 사진은 2MB 이하로 올려주세요.");
+            }
+            user.setAvatarImage(img.isEmpty() ? null : img);
+        }
         return UserResponse.from(userAccountRepository.save(user));
     }
 
@@ -169,6 +176,7 @@ public class UserService {
             String age,
             String bio,
             List<String> interests,
-            Long notificationsSeenAt
+            Long notificationsSeenAt,
+            String avatarImage
     ) {}
 }

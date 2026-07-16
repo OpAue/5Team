@@ -19,7 +19,8 @@ public record UserResponse(
         boolean loginable,
         Double lastLat,
         Double lastLng,
-        long notificationsSeenAt
+        long notificationsSeenAt,
+        String avatarImage
 ) {
     public static UserResponse from(UserAccount user) {
         return new UserResponse(
@@ -37,7 +38,8 @@ public record UserResponse(
                 user.isLoginable(),
                 user.getLastLat(),
                 user.getLastLng(),
-                user.getNotificationsSeenAt()
+                user.getNotificationsSeenAt(),
+                user.getAvatarImage() == null ? "" : user.getAvatarImage()
         );
     }
 }

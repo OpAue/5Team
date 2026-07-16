@@ -26,8 +26,7 @@ import {
 import FundingCover from '../../components/FundingCover'
 import { useKakao } from '../../lib/kakao'
 import shareBtn from '../../assets/fundingtab/share-btn.svg'
-import avatarPro from '../../assets/fundingtab/avatar-pro.svg'
-import participantAvatar from '../../assets/fundingtab/participant-avatar.svg'
+import UserAvatar from '../../components/UserAvatar'
 import chatNoteIcon from '../../assets/fundingtab/chat-note-icon.svg'
 import aiIcon from '../../assets/fundingtab/ai-icon.svg'
 import infoIcon from '../../assets/fundingtab/info-icon.svg'
@@ -186,7 +185,7 @@ export default function FundingTab() {
             className="flex w-full items-center justify-between border-t border-b border-[var(--hairline)] py-[15px]"
           >
             <div className="flex items-center gap-[11px]">
-              <img src={avatarPro} alt="" className="size-[47px]" />
+              <UserAvatar user={host} size={47} />
               <div className="flex flex-col items-start gap-[2px]">
                 <div className="flex items-center gap-[6px]">
                   <p className="text-[16px] font-bold text-[var(--heading)]">{host?.name}</p>
@@ -218,11 +217,17 @@ export default function FundingTab() {
               />
             </div>
             <div className="flex items-center">
-              {Array.from({ length: Math.min(4, current) }).map((_, i) => (
-                <img key={i} src={participantAvatar} alt="" className="-mr-[9px] size-[30px]" />
+              {funding.participants.slice(0, 4).map((email, i) => (
+                <div
+                  key={email}
+                  className="relative -mr-[9px] rounded-full border-2 border-white"
+                  style={{ zIndex: 4 - i }}
+                >
+                  <UserAvatar user={getUser(email)} size={30} />
+                </div>
               ))}
               {current > 4 && (
-                <div className="flex size-[30px] items-center justify-center rounded-full border-2 border-white bg-[#303441]">
+                <div className="relative z-[0] flex size-[30px] items-center justify-center rounded-full border-2 border-white bg-[#303441]">
                   <span className="text-[11px] font-bold text-white">+{current - 4}</span>
                 </div>
               )}
@@ -322,7 +327,7 @@ export default function FundingTab() {
                   key={`${c.fundingId}-${c.id}`}
                   className={`flex items-start gap-[9px] ${c.parentId ? 'ml-[28px]' : ''}`}
                 >
-                  <div className="size-[30px] shrink-0 rounded-full bg-[var(--hairline)]" />
+                  <UserAvatar user={author} size={30} />
                   <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
                     <div className="flex items-center justify-between gap-[8px]">
                       <p className="text-[14px] font-bold text-[var(--heading)]">
