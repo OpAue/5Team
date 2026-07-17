@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { createSeedDB, type DB } from './schema'
 
-const STORAGE_KEY = 'dh_db_v4'
+const STORAGE_KEY = 'dh_db_v5'
 
 let db: DB = load()
 const listeners = new Set<() => void>()
