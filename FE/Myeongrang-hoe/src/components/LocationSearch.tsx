@@ -18,6 +18,8 @@ export default function LocationSearch({
 }) {
   const [kakaoLoading, kakaoError] = useKakao()
   const [query, setQuery] = useState('')
+  const [manualName, setManualName] = useState('')
+  const [manualAddress, setManualAddress] = useState('')
   const [results, setResults] = useState<kakao.maps.services.PlacesSearchResult>([])
   const [searched, setSearched] = useState(false)
 
@@ -55,6 +57,22 @@ export default function LocationSearch({
     setQuery('')
   }
 
+  function handleManualSelect() {
+    const name = manualName.trim()
+    if (!name) return
+
+    onSelect({
+      name,
+      address: manualAddress.trim() || name,
+      lat: CAMPUS_CENTER.lat,
+      lng: CAMPUS_CENTER.lng,
+    })
+    setManualName('')
+    setManualAddress('')
+    setResults([])
+    setSearched(false)
+  }
+
   return (
     <div className="mt-[8px] w-full">
       {value ? (
@@ -73,32 +91,61 @@ export default function LocationSearch({
         </div>
       ) : (
         <>
-          <div className="flex items-center gap-[8px]">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder={
-                kakaoLoading ? '지도를 불러오는 중...' : '장소, 건물명, 지번으로 검색해보세요'
-              }
-              disabled={kakaoLoading || !!kakaoError}
-              className="w-full flex-1 border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none disabled:opacity-50"
-            />
-            <button
-              type="button"
-              onClick={handleSearch}
-              disabled={kakaoLoading || !!kakaoError}
-              className="shrink-0 rounded-[4px] border border-[var(--border)] px-[12px] py-[10px] text-[13px] font-medium text-[var(--heading)] disabled:opacity-40"
-            >
-              검색
-            </button>
-          </div>
-
-          {kakaoError && (
-            <p className="mt-[8px] text-[12px] text-[var(--red)]">
-              지도를 불러오지 못해 장소 검색을 쓸 수 없어요
-            </p>
+          {kakaoError ? (
+            <div className="flex flex-col gap-[8px] rounded-[4px] border border-[var(--border-card)] bg-[var(--hairline)] p-[13px]">
+              <p className="text-[12px] font-medium text-[var(--label)]">
+                카카오맵을 불러오지 못해 장소를 직접 입력합니다.
+              </p>
+              <input
+                type="text"
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleManualSelect()}
+                placeholder="장소 이름"
+                className="w-full rounded-[4px] border border-[var(--border-card)] bg-white px-[12px] py-[10px] text-[14px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
+              />
+              <input
+                type="text"
+                value={manualAddress}
+                onChange={(e) => setManualAddress(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleManualSelect()}
+                placeholder="주소 또는 만날 위치 설명"
+                className="w-full rounded-[4px] border border-[var(--border-card)] bg-white px-[12px] py-[10px] text-[14px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleManualSelect}
+                disabled={!manualName.trim()}
+                className="h-[40px] rounded-[4px] bg-[var(--primary-deep)] text-[13px] font-bold text-white disabled:opacity-40"
+              >
+                이 장소로 설정
+              </button>
+              <p className="text-[11px] text-[var(--border)]">
+                지도 좌표는 테스트용으로 명지대 인문캠퍼스 기준으로 저장됩니다.
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-[8px]">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder={
+                  kakaoLoading ? '지도를 불러오는 중...' : '장소, 건물명, 지번으로 검색해보세요'
+                }
+                disabled={kakaoLoading}
+                className="w-full flex-1 border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={kakaoLoading}
+                className="shrink-0 rounded-[4px] border border-[var(--border)] px-[12px] py-[10px] text-[13px] font-medium text-[var(--heading)] disabled:opacity-40"
+              >
+                검색
+              </button>
+            </div>
           )}
 
           {results.length > 0 && (

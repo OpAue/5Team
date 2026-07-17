@@ -27,6 +27,7 @@ import {
   isWishlisted,
   joinFunding,
   leaveFunding,
+  syncNudgeMessage,
   syncFundingDetail,
   toggleWishlist,
 } from '../../store/actions'
@@ -39,21 +40,22 @@ import UserAvatar from '../../components/UserAvatar'
 import chatNoteIcon from '../../assets/fundingtab/chat-note-icon.svg'
 import aiIcon from '../../assets/fundingtab/ai-icon.svg'
 import infoIcon from '../../assets/fundingtab/info-icon.svg'
+import nudgeIcon from '../../assets/home/nudge-icon.svg'
 import { sunlightTier } from '../../lib/sunlight'
 import { blockUser, isBlocked } from '../../store/moderation'
 
 const riskCopy: Record<string, { label: string; body: string }> = {
   낮음: {
     label: 'AI 노쇼 리스크 분석 · 신뢰도 높음',
-    body: '작성자의 이전 성사 이력, 후기 평가, 글의 구체성을 분석한 결과입니다. 안심하고 참여해도 좋아요.',
+    body: '글의 구체성, 장소와 시간, 작성자 활동 이력을 함께 본 결과예요. 안심하고 참여해도 좋아요.',
   },
   중간: {
     label: 'AI 노쇼 리스크 분석 · 신뢰도 보통',
-    body: '작성자의 활동 이력이 아직 많지 않아요. 참여 전 댓글로 일정을 한 번 더 확인해보세요.',
+    body: '분석할 이력이 아직 충분하지 않아요. 참여 전 댓글로 장소와 시간을 한 번 더 확인해보세요.',
   },
   높음: {
-    label: 'AI 노쇼 리스크 분석 · 주의',
-    body: '과거 노쇼·취소 이력이 있는 모임이에요. 신중하게 참여를 결정해주세요.',
+    label: 'AI 노쇼 리스크 분석 · 노쇼 위험 높음',
+    body: '노쇼 또는 취소 이력과 모임 정보 부족 요소가 감지됐어요. 신중하게 참여를 결정해주세요.',
   },
 }
 
@@ -187,6 +189,8 @@ export default function FundingTab() {
   const expired = isExpired(funding)
   const closed = isClosed(funding)
   const joined = !!me && isParticipant(funding, me.email)
+  const remaining = funding.targetCount - current
+  const showNudge = !closed && !matched && remaining === 1
   const progress = Math.round((current / funding.targetCount) * 100)
   const risk = riskCopy[funding.aiRisk]
   const wishlisted = !!me && isWishlisted(me.email, funding.id)
@@ -202,6 +206,13 @@ export default function FundingTab() {
       location: [funding.locationName, funding.address].filter(Boolean).join(' '),
       start: funding.meetAt,
     })
+  const nudgeMessage =
+    funding.nudgeMessage ?? `딱 한 명만 더 모이면 "${funding.title}"가 바로 출발해요!`
+
+  useEffect(() => {
+    if (!showNudge || funding.nudgeMessage) return
+    void syncNudgeMessage(funding.id)
+  }, [funding.id, funding.nudgeMessage, showNudge])
 
   function handleBlockHost() {
     setShowMenu(false)
@@ -423,6 +434,16 @@ export default function FundingTab() {
               </button>
             )}
           </div>
+
+          {showNudge && (
+            <div className="flex w-full items-start gap-[11px] rounded-[4px] border border-[var(--primary-deep)] bg-[var(--primary-tint)] p-[15px]">
+              <img src={nudgeIcon} alt="" className="size-[21px] shrink-0" />
+              <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+                <p className="text-[14px] font-bold text-[var(--primary-deep)]">AI 성사 임박 넛지</p>
+                <p className="text-[13px] text-[var(--label)]">{nudgeMessage}</p>
+              </div>
+            </div>
+          )}
 
           <div className="h-[4px]" />
 

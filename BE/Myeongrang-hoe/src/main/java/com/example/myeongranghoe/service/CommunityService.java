@@ -143,9 +143,10 @@ public class CommunityService {
                 .orElseThrow(() -> new IllegalArgumentException("후기 대상 사용자를 찾을 수 없어요."));
         if (noShow) {
             targetUser.setNoShowCount(targetUser.getNoShowCount() + 1);
-            targetUser.setSunlightScore(Math.max(0, targetUser.getSunlightScore() - 20));
-        } else if (checklist != null && !checklist.isEmpty()) {
-            targetUser.setSunlightScore(Math.min(100, targetUser.getSunlightScore() + 4));
+            targetUser.setSunlightScore(clampSunlight(targetUser.getSunlightScore() - 20));
+        } else {
+            int delta = calculateReviewSunlightDelta(checklist);
+            targetUser.setSunlightScore(clampSunlight(targetUser.getSunlightScore() + delta));
         }
         userAccountRepository.save(targetUser);
 
@@ -234,5 +235,19 @@ public class CommunityService {
 
     private static String normalize(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static int calculateReviewSunlightDelta(List<String> checklist) {
+        if (checklist == null || checklist.isEmpty()) {
+            return 0;
+        }
+        long checkedCount = checklist.stream()
+                .filter(item -> item != null && !item.trim().isBlank())
+                .count();
+        return (int) Math.min(checkedCount * 2, 10);
+    }
+
+    private static int clampSunlight(int score) {
+        return Math.max(0, Math.min(100, score));
     }
 }
