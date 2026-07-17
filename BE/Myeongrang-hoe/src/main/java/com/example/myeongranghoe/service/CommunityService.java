@@ -145,7 +145,7 @@ public class CommunityService {
             targetUser.setNoShowCount(targetUser.getNoShowCount() + 1);
             targetUser.setSunlightScore(clampSunlight(targetUser.getSunlightScore() - 20));
         } else {
-            int delta = calculateReviewSunlightDelta(checklist, content);
+            int delta = calculateReviewSunlightDelta(checklist);
             targetUser.setSunlightScore(clampSunlight(targetUser.getSunlightScore() + delta));
         }
         userAccountRepository.save(targetUser);
@@ -237,33 +237,14 @@ public class CommunityService {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 
-    private static int calculateReviewSunlightDelta(List<String> checklist, String content) {
-        int delta = 0;
-        if (checklist != null) {
-            for (String item : checklist) {
-                String normalized = item == null ? "" : item.trim();
-                if (normalized.isBlank()) {
-                    continue;
-                }
-                if (normalized.contains("시간")) {
-                    delta += 3;
-                } else if (normalized.contains("다시")) {
-                    delta += 3;
-                } else if (normalized.contains("친절")) {
-                    delta += 2;
-                } else if (normalized.contains("분위기")) {
-                    delta += 2;
-                } else if (normalized.contains("장소") || normalized.contains("안내")) {
-                    delta += 2;
-                } else {
-                    delta += 1;
-                }
-            }
+    private static int calculateReviewSunlightDelta(List<String> checklist) {
+        if (checklist == null || checklist.isEmpty()) {
+            return 0;
         }
-        if (content != null && content.trim().length() >= 10) {
-            delta += 1;
-        }
-        return Math.min(delta, 10);
+        long checkedCount = checklist.stream()
+                .filter(item -> item != null && !item.trim().isBlank())
+                .count();
+        return (int) Math.min(checkedCount * 2, 10);
     }
 
     private static int clampSunlight(int score) {

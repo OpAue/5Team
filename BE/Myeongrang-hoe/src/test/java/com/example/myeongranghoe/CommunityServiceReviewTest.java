@@ -40,7 +40,7 @@ class CommunityServiceReviewTest {
     );
 
     @Test
-    void reviewChecklistUpdatesSunlightScoreByChecklistSignals() {
+    void reviewChecklistUpdatesSunlightScoreByCheckedItemCount() {
         UserAccount targetUser = targetUser(50, 0);
         prepareReview(targetUser);
 
@@ -53,7 +53,7 @@ class CommunityServiceReviewTest {
                 false
         );
 
-        assertThat(targetUser.getSunlightScore()).isEqualTo(59);
+        assertThat(targetUser.getSunlightScore()).isEqualTo(56);
         assertThat(targetUser.getNoShowCount()).isZero();
     }
 
