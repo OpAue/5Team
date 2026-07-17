@@ -27,6 +27,7 @@ import {
   isWishlisted,
   joinFunding,
   leaveFunding,
+  syncNudgeMessage,
   syncFundingDetail,
   toggleWishlist,
 } from '../../store/actions'
@@ -39,6 +40,7 @@ import UserAvatar from '../../components/UserAvatar'
 import chatNoteIcon from '../../assets/fundingtab/chat-note-icon.svg'
 import aiIcon from '../../assets/fundingtab/ai-icon.svg'
 import infoIcon from '../../assets/fundingtab/info-icon.svg'
+import nudgeIcon from '../../assets/home/nudge-icon.svg'
 import { sunlightTier } from '../../lib/sunlight'
 import { blockUser, isBlocked } from '../../store/moderation'
 
@@ -187,6 +189,8 @@ export default function FundingTab() {
   const expired = isExpired(funding)
   const closed = isClosed(funding)
   const joined = !!me && isParticipant(funding, me.email)
+  const remaining = funding.targetCount - current
+  const showNudge = !closed && !matched && remaining === 1
   const progress = Math.round((current / funding.targetCount) * 100)
   const risk = riskCopy[funding.aiRisk]
   const wishlisted = !!me && isWishlisted(me.email, funding.id)
@@ -202,6 +206,13 @@ export default function FundingTab() {
       location: [funding.locationName, funding.address].filter(Boolean).join(' '),
       start: funding.meetAt,
     })
+  const nudgeMessage =
+    funding.nudgeMessage ?? `딱 한 명만 더 모이면 "${funding.title}"가 바로 출발해요!`
+
+  useEffect(() => {
+    if (!showNudge || funding.nudgeMessage) return
+    void syncNudgeMessage(funding.id)
+  }, [funding.id, funding.nudgeMessage, showNudge])
 
   function handleBlockHost() {
     setShowMenu(false)
@@ -423,6 +434,16 @@ export default function FundingTab() {
               </button>
             )}
           </div>
+
+          {showNudge && (
+            <div className="flex w-full items-start gap-[11px] rounded-[4px] border border-[var(--primary-deep)] bg-[var(--primary-tint)] p-[15px]">
+              <img src={nudgeIcon} alt="" className="size-[21px] shrink-0" />
+              <div className="flex min-w-0 flex-1 flex-col gap-[2px]">
+                <p className="text-[14px] font-bold text-[var(--primary-deep)]">AI 성사 임박 넛지</p>
+                <p className="text-[13px] text-[var(--label)]">{nudgeMessage}</p>
+              </div>
+            </div>
+          )}
 
           <div className="h-[4px]" />
 
