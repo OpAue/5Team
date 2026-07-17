@@ -1,4 +1,13 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8080'
+function normalizeBaseUrl(raw: string | undefined): string {
+  const value = (raw ?? '').trim().replace(/\/+$/, '')
+  // 빈 문자열도 로컬 기본값으로 처리한다 (??는 빈 문자열에 발동하지 않음)
+  if (!value) return 'http://127.0.0.1:8080'
+  if (/^https?:\/\//i.test(value)) return value
+  // 배포 환경변수에 프로토콜 없이 도메인만 넣은 경우, 상대 경로로 붙지 않게 보정한다
+  return `https://${value}`
+}
+
+export const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
 
 const TOKEN_KEY = 'mh_access_token'
 
