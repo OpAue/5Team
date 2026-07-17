@@ -995,8 +995,8 @@ export function submitReview(
       target.noShowCount += 1
       target.sunlightScore = Math.max(0, target.sunlightScore - 20)
     } else {
-      const positive = checklist.length > 0
-      target.sunlightScore = Math.max(0, Math.min(100, target.sunlightScore + (positive ? 4 : 0)))
+      const sunlightDelta = Math.min(checklist.length * 2, 10)
+      target.sunlightScore = Math.max(0, Math.min(100, target.sunlightScore + sunlightDelta))
     }
   })
   if (getAccessToken()) {
