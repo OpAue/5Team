@@ -22,7 +22,15 @@ import {
   syncUserReviewsFromServer,
   wishlistOf,
 } from '../../store/actions'
-import { sunlightTier } from '../../lib/sunlight'
+import {
+  sunlightTier,
+  sunlightTierIndex,
+  SUNLIGHT_PREVIEW_SCORES,
+  SUNLIGHT_TIERS,
+} from '../../lib/sunlight'
+import { TEST_ACCOUNTS } from '../../store/schema'
+
+const TEST_EMAILS = new Set(Object.values(TEST_ACCOUNTS))
 
 type Tab = 'review' | 'history' | 'wishlist' | 'stats'
 
@@ -38,6 +46,8 @@ export default function MyPage() {
   useDB()
   const me = getCurrentUser()
   const [tab, setTab] = useState<Tab>('review')
+  /** 테스트 계정 전용: 햇살 단계 미리보기 인덱스 (null이면 실제 점수) */
+  const [sunPreviewIndex, setSunPreviewIndex] = useState<number | null>(null)
 
   useEffect(() => {
     void syncMeFromServer().then(() => {
@@ -46,12 +56,35 @@ export default function MyPage() {
     })
   }, [])
 
+  useEffect(() => {
+    setSunPreviewIndex(null)
+  }, [me?.email])
+
   function handleLogout() {
     logout()
     navigate('/login')
   }
 
   if (!me) return null
+
+  const isTestAccount = TEST_EMAILS.has(me.email)
+  const realTier = sunlightTierIndex(me.sunlightScore)
+  const activeTierIndex = isTestAccount ? (sunPreviewIndex ?? realTier) : realTier
+  const displayScore = isTestAccount
+    ? sunPreviewIndex == null
+      ? me.sunlightScore
+      : SUNLIGHT_PREVIEW_SCORES[sunPreviewIndex]
+    : me.sunlightScore
+  const displayTierLabel = sunlightTier(displayScore)
+  const tierPalette = SUNLIGHT_TIERS[activeTierIndex]
+
+  function cycleSunPreview(delta: number) {
+    if (!isTestAccount) return
+    setSunPreviewIndex((prev) => {
+      const base = prev ?? realTier
+      return (base + delta + SUNLIGHT_PREVIEW_SCORES.length) % SUNLIGHT_PREVIEW_SCORES.length
+    })
+  }
 
   const reviews = reviewsReceivedBy(me.email)
   const history = fundingsOf(me.email)
@@ -107,25 +140,59 @@ export default function MyPage() {
             </button>
           </div>
 
-          <div className="flex w-full items-center gap-[15px] p-[4px]">
-            <SunlightBadge score={me.sunlightScore} size={60} />
+          <div className="flex w-full items-center gap-[10px] p-[4px]">
+            {isTestAccount && (
+              <button
+                type="button"
+                aria-label="이전 햇살 단계 미리보기"
+                onClick={() => cycleSunPreview(-1)}
+                className="flex size-[28px] shrink-0 items-center justify-center rounded-full border border-[var(--border-card)] bg-white text-[16px] font-bold text-[var(--primary-deep)] shadow-sm"
+              >
+                ‹
+              </button>
+            )}
+            <SunlightBadge
+              score={displayScore}
+              size={60}
+              tierOverride={isTestAccount ? (activeTierIndex as 0 | 1 | 2 | 3) : undefined}
+            />
             <div className="flex min-w-0 flex-1 flex-col gap-[6px]">
-              <div className="flex items-center gap-[9px]">
+              <div className="flex flex-wrap items-center gap-[9px]">
                 <p className="text-[15px] font-bold text-[var(--heading)]">햇살지수</p>
                 <span className="rounded-[12px] bg-[var(--primary-tint)] px-[9px] py-[2px] text-[12px] font-bold text-[var(--primary-deep)]">
-                  {sunlightTier(me.sunlightScore)}
+                  {displayTierLabel}
                 </span>
               </div>
               <div className="h-[9px] w-full overflow-hidden rounded-full bg-[var(--hairline)]">
                 <div
-                  className="h-full rounded-full bg-[var(--primary-deep)]"
-                  style={{ width: `${me.sunlightScore}%` }}
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.max(0, displayScore))}%`,
+                    background: tierPalette.bar,
+                  }}
                 />
               </div>
               <p className="text-[13px] text-[var(--label)]">
-                {me.sunlightScore} / 100 · 노쇼 {me.noShowCount}회
+                {displayScore} / 100 · 노쇼 {me.noShowCount}회
+                {isTestAccount && sunPreviewIndex != null && (
+                  <span className="text-[var(--border)]">
+                    {' '}
+                    · 미리보기 {sunPreviewIndex + 1}/{SUNLIGHT_PREVIEW_SCORES.length}
+                    {displayScore !== me.sunlightScore ? ' (실제와 다름)' : ''}
+                  </span>
+                )}
               </p>
             </div>
+            {isTestAccount && (
+              <button
+                type="button"
+                aria-label="다음 햇살 단계 미리보기"
+                onClick={() => cycleSunPreview(1)}
+                className="flex size-[28px] shrink-0 items-center justify-center rounded-full border border-[var(--border-card)] bg-white text-[16px] font-bold text-[var(--primary-deep)] shadow-sm"
+              >
+                ›
+              </button>
+            )}
           </div>
 
           <div className="flex w-full items-center">
