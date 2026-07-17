@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { applyServerUser, loginAsTestAccount, loginWithPassword } from '../../store/actions'
+import { applyServerUser, loginWithPassword } from '../../store/actions'
 import { loginWithApi, sendVerificationCode, setAccessToken, verifyEmailCode } from '../../lib/api'
 import { showToast } from '../../store/ui'
-import { TEST_ACCOUNTS } from '../../store/schema'
 import { patchDraft } from '../../store/signupDraft'
 
 type Mode = 'login' | 'signup'
@@ -18,7 +17,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loginError, setLoginError] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
-  const [testLoggingIn, setTestLoggingIn] = useState<keyof typeof TEST_ACCOUNTS | null>(null)
 
   const [signupEmail, setSignupEmail] = useState('')
   const [code, setCode] = useState('')
@@ -52,26 +50,6 @@ export default function Login() {
       setLoginError(error instanceof Error ? error.message : '로그인에 실패했어요.')
     } finally {
       setLoggingIn(false)
-    }
-  }
-
-  async function handleTestLogin(key: keyof typeof TEST_ACCOUNTS) {
-    if (testLoggingIn) return
-    const testEmail = TEST_ACCOUNTS[key]
-    setTestLoggingIn(key)
-    try {
-      const { user } = await loginWithApi(testEmail, 'test1234')
-      applyServerUser(user, { password: 'test1234', setCurrent: true })
-      showToast('테스트 계정으로 로그인했어요', 'success')
-      navigate('/')
-    } catch {
-      // Fallback: local-only when backend is offline
-      setAccessToken(null)
-      loginAsTestAccount(testEmail)
-      showToast('서버에 연결할 수 없어 로컬 모드로 입장했어요', 'info')
-      navigate('/')
-    } finally {
-      setTestLoggingIn(null)
     }
   }
 
@@ -162,52 +140,13 @@ export default function Login() {
 
       {mode === 'login' ? (
         <>
-          <p className="text-[13px] font-bold text-[var(--label)]">
-            테스트 계정 2개로 서로 참여·채팅·후기를 주고받을 수 있어요
-          </p>
-          <div className="h-[10px]" />
-          <div className="flex w-full gap-[8px]">
-            <button
-              type="button"
-              onClick={() => handleTestLogin('test1')}
-              disabled={!!testLoggingIn}
-              className="flex flex-1 flex-col items-start gap-[2px] rounded-[4px] border border-dashed border-[var(--primary-deep)] bg-[var(--primary-tint)] px-[13px] py-[12px] text-left disabled:opacity-40"
-            >
-              <span className="text-[13px] font-bold text-[var(--primary-deep)]">
-                {testLoggingIn === 'test1' ? '로그인 중...' : '김명지 (test1)'}
-              </span>
-              <span className="text-[11px] text-[var(--label)]">인문캠퍼스</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleTestLogin('test2')}
-              disabled={!!testLoggingIn}
-              className="flex flex-1 flex-col items-start gap-[2px] rounded-[4px] border border-dashed border-[var(--blue-deep)] bg-[var(--blue-tint)] px-[13px] py-[12px] text-left disabled:opacity-40"
-            >
-              <span className="text-[13px] font-bold text-[var(--blue-deep)]">
-                {testLoggingIn === 'test2' ? '로그인 중...' : '이자연 (test2)'}
-              </span>
-              <span className="text-[11px] text-[var(--label)]">자연캠퍼스</span>
-            </button>
-          </div>
-
-          <div className="h-[24px]" />
-
-          <div className="flex w-full items-center gap-[10px]">
-            <div className="h-[1px] flex-1 bg-[var(--hairline)]" />
-            <span className="text-[12px] text-[var(--border)]">또는 직접 로그인</span>
-            <div className="h-[1px] flex-1 bg-[var(--hairline)]" />
-          </div>
-
-          <div className="h-[24px]" />
-
           <p className="text-[14px] font-bold text-[var(--heading)]">학교 이메일</p>
           <div className="h-[8px]" />
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="test1@mju.ac.kr"
+            placeholder="example@mju.ac.kr"
             className="w-full border-b border-[var(--hairline)] py-[14px] text-[16px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
           />
 
@@ -219,7 +158,7 @@ export default function Login() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="test1234"
+            placeholder="PassWord"
             className="w-full border-b border-[var(--hairline)] py-[14px] text-[16px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
           />
           {loginError && <p className="pt-[8px] text-[12px] font-medium text-[var(--red)]">{loginError}</p>}
