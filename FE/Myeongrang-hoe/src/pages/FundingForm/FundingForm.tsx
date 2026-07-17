@@ -11,8 +11,9 @@ import {
 } from '../../store/actions'
 import { setGlobalLoading, showToast } from '../../store/ui'
 import { getAccessToken, uploadImageApi } from '../../lib/api'
+import { FUNDING_CATEGORIES } from '../../store/schema'
 
-const categories = ['맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑']
+const categories = FUNDING_CATEGORIES
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024 // 2MB
 
 function pad(n: number): string {
