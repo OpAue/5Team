@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Map, CustomOverlayMap, MapMarker, ZoomControl } from 'react-kakao-maps-sdk'
 import BottomNav from '../../components/BottomNav'
@@ -54,9 +54,11 @@ export default function Home() {
   const [refreshTick, setRefreshTick] = useState(0)
   const [radiusMode, setRadiusMode] = useState<RadiusMode>('3')
   const [tourPlaying, setTourPlaying] = useState(false)
+  const [interestPage, setInterestPage] = useState(0)
   const toastedWishlist = useRef(new Set<string>())
   const tourTimer = useRef<number | null>(null)
   const tourIndex = useRef(0)
+  const interestTouchStartX = useRef<number | null>(null)
 
   function locate() {
     setLocating(true)
@@ -134,6 +136,7 @@ export default function Home() {
 
   const sorted = useMemo(() => {
     return filterBlockedFundingHost(db.fundings)
+      .filter((f) => !isExpired(f) && !isClosed(f))
       .map((f) => ({
         ...f,
         distanceKm: distanceKm(center, { lat: f.lat, lng: f.lng }),
@@ -150,9 +153,39 @@ export default function Home() {
   const interestFundings = useMemo(() => {
     if (!me?.interests?.length) return []
     return filterBlockedFundingHost(db.fundings)
-      .filter((f) => me.interests.includes(f.category) && !isExpired(f))
+      .filter((f) => me.interests.includes(f.category) && !isExpired(f) && !isClosed(f))
       .slice(0, 12)
   }, [db.fundings, me?.interests])
+
+  const INTEREST_PAGE_SIZE = 2
+  const interestPages = useMemo(() => {
+    const pages: (typeof interestFundings)[] = []
+    for (let i = 0; i < interestFundings.length; i += INTEREST_PAGE_SIZE) {
+      pages.push(interestFundings.slice(i, i + INTEREST_PAGE_SIZE))
+    }
+    return pages
+  }, [interestFundings])
+
+  const interestPageIndex = Math.min(interestPage, Math.max(0, interestPages.length - 1))
+
+  function goInterestPrev() {
+    setInterestPage((p) => Math.max(0, p - 1))
+  }
+  function goInterestNext() {
+    setInterestPage((p) => Math.min(interestPages.length - 1, p + 1))
+  }
+  function handleInterestTouchStart(e: TouchEvent) {
+    interestTouchStartX.current = e.touches[0]?.clientX ?? null
+  }
+  function handleInterestTouchEnd(e: TouchEvent) {
+    const startX = interestTouchStartX.current
+    interestTouchStartX.current = null
+    if (startX == null) return
+    const deltaX = (e.changedTouches[0]?.clientX ?? startX) - startX
+    if (Math.abs(deltaX) < 40) return
+    if (deltaX < 0) goInterestNext()
+    else goInterestPrev()
+  }
 
   const clusters = useMemo(() => {
     return clusterPoints(
@@ -315,9 +348,19 @@ export default function Home() {
             type="button"
             aria-label="내 위치로 이동"
             onClick={locate}
-            className="absolute right-[18px] bottom-[68px] z-10"
+            className="absolute right-[18px] bottom-[68px] z-10 flex size-[47px] items-center justify-center"
           >
-            <img src={locateBtn} alt="" className="size-[47px]" />
+            <img src={locateBtn} alt="" className="absolute inset-0 size-full" />
+            {/* locate-btn.svg는 하단 그림자 여백 때문에 원이 뷰박스 중앙보다 위쪽에 있어, 아이콘을 그만큼 올려 맞춘다 */}
+            <svg viewBox="0 0 24 24" fill="none" className="relative -translate-y-[2.8px] size-[22px]">
+              <circle cx="12" cy="12" r="3.2" stroke="var(--primary-deep)" strokeWidth="2" />
+              <path
+                d="M12 2v3.2M12 18.8V22M22 12h-3.2M5.2 12H2"
+                stroke="var(--primary-deep)"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
 
           {/* 재생(주변 펀딩 투어) 버튼 — 흰 원 + 삼각형 */}
@@ -409,34 +452,97 @@ export default function Home() {
             )}
           </div>
 
-          {/* 관심사 맞춤 가로 스크롤 */}
-          {interestFundings.length > 0 && (
+          {/* 관심사 맞춤 페이지형 카드 */}
+          {me && (
             <div className="flex flex-col gap-[8px]">
-              <p className="text-[16px] font-bold text-[var(--heading)]">
-                내 관심 {me?.interests?.slice(0, 3).join(' · ')}
-              </p>
-              <div className="-mx-[17px] overflow-x-auto px-[17px]">
-                <div className="flex w-max gap-[10px] pb-[4px]">
-                  {interestFundings.map((g) => {
-                    const current = currentCountOf(g)
-                    return (
-                      <Link
-                        key={g.id}
-                        to={`/funding/${g.id}`}
-                        className="w-[200px] shrink-0 rounded-[8px] border border-[var(--border-card)] bg-white p-[12px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]"
-                      >
-                        <span className="text-[11px] font-bold text-[var(--primary-deep)]">{g.category}</span>
-                        <p className="mt-[4px] line-clamp-2 text-[14px] font-bold text-[var(--heading)]">
-                          {g.title}
-                        </p>
-                        <p className="mt-[6px] truncate text-[11px] text-[var(--label)]">
-                          {g.locationName} · {current}/{g.targetCount}명
-                        </p>
-                      </Link>
-                    )
-                  })}
-                </div>
+              <div className="flex items-center justify-between">
+                <p className="text-[16px] font-bold text-[var(--heading)]">내 관심사</p>
+                {interestPages.length > 1 && (
+                  <div className="flex items-center gap-[6px]">
+                    <button
+                      type="button"
+                      aria-label="이전 관심사 펀딩"
+                      onClick={goInterestPrev}
+                      disabled={interestPageIndex === 0}
+                      className="flex size-[22px] items-center justify-center rounded-full bg-[var(--hairline)] text-[11px] font-bold text-[var(--label)] disabled:opacity-30"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="다음 관심사 펀딩"
+                      onClick={goInterestNext}
+                      disabled={interestPageIndex === interestPages.length - 1}
+                      className="flex size-[22px] items-center justify-center rounded-full bg-[var(--hairline)] text-[11px] font-bold text-[var(--label)] disabled:opacity-30"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {!me.interests?.length ? (
+                <Link
+                  to="/profile-setup/edit"
+                  className="rounded-[8px] border border-dashed border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] font-medium text-[var(--label)]"
+                >
+                  관심사를 등록해주세요
+                </Link>
+              ) : interestPages.length === 0 ? (
+                <p className="rounded-[8px] border border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] text-[var(--border)]">
+                  관심사에 맞는 글이 없어요
+                </p>
+              ) : (
+                <>
+                  <div
+                    className="-mx-[17px] overflow-hidden px-[17px]"
+                    onTouchStart={handleInterestTouchStart}
+                    onTouchEnd={handleInterestTouchEnd}
+                  >
+                    <div
+                      className="flex transition-transform duration-300 ease-out"
+                      style={{ transform: `translateX(-${interestPageIndex * 100}%)` }}
+                    >
+                      {interestPages.map((page, pageIdx) => (
+                        <div key={pageIdx} className="flex w-full shrink-0 gap-[10px] pb-[4px]">
+                          {page.map((g) => {
+                            const current = currentCountOf(g)
+                            return (
+                              <Link
+                                key={g.id}
+                                to={`/funding/${g.id}`}
+                                className="w-[calc((100%-10px)/2)] shrink-0 rounded-[8px] border border-[var(--border-card)] bg-white p-[12px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]"
+                              >
+                                <span className="text-[11px] font-bold text-[var(--primary-deep)]">
+                                  {g.category}
+                                </span>
+                                <p className="mt-[4px] line-clamp-2 text-[14px] font-bold text-[var(--heading)]">
+                                  {g.title}
+                                </p>
+                                <p className="mt-[6px] truncate text-[11px] text-[var(--label)]">
+                                  {g.locationName} · {current}/{g.targetCount}명
+                                </p>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {interestPages.length > 1 && (
+                    <div className="flex items-center justify-center gap-[5px]">
+                      {interestPages.map((page, i) => (
+                        <span
+                          key={page[0]?.id ?? i}
+                          className={`size-[5px] rounded-full transition-colors ${
+                            i === interestPageIndex ? 'bg-[var(--primary-deep)]' : 'bg-[var(--hairline)]'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 

@@ -151,11 +151,13 @@ public class UserService {
         if (interests == null || interests.isEmpty()) {
             return new ArrayList<>();
         }
-        return interests.stream()
+        // Hibernate가 @ElementCollection을 merge할 때 컬렉션을 직접 clear()/add() 하므로
+        // 반드시 가변 리스트여야 한다 (Stream#toList()는 불변이라 UnsupportedOperationException 발생)
+        return new ArrayList<>(interests.stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(String::trim)
                 .distinct()
-                .toList();
+                .toList());
     }
 
     public record SignUpCommand(

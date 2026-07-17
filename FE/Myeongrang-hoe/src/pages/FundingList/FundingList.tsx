@@ -12,15 +12,74 @@ import {
   participantNamesOf,
   syncFundingsFromServer,
 } from '../../store/actions'
-import { CAMPUS_CENTER } from '../../store/schema'
+import { CAMPUS_CENTER, FUNDING_CATEGORIES } from '../../store/schema'
 import { filterBlockedFundingHost } from '../../store/moderation'
 import { distanceKm } from '../../lib/geo'
 
-const CATEGORIES = ['전체', '맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑'] as const
+const CATEGORIES = ['전체', ...FUNDING_CATEGORIES] as const
 type CategoryFilter = (typeof CATEGORIES)[number]
 type SortKey = 'latest' | 'almost' | 'nearby' | 'popular'
 type DateFilter = 'all' | 'today' | 'week'
 type RadiusFilter = 'all' | '1' | '3'
+type StatusFilter = 'expired' | 'none' | 'matched' | 'both'
+
+const DATE_OPTIONS: { value: DateFilter; label: string }[] = [
+  { value: 'all', label: '날짜 전체' },
+  { value: 'today', label: '오늘' },
+  { value: 'week', label: '이번 주' },
+]
+
+const RADIUS_OPTIONS: { value: RadiusFilter; label: string }[] = [
+  { value: 'all', label: '거리 전체' },
+  { value: '1', label: '1km 이내' },
+  { value: '3', label: '3km 이내' },
+]
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'latest', label: '최신순' },
+  { value: 'almost', label: '성사임박순' },
+  { value: 'nearby', label: '가까운순' },
+  { value: 'popular', label: '인기순' },
+]
+
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'expired', label: '마감 제외' },
+  { value: 'none', label: '전체 보기' },
+  { value: 'matched', label: '모집완료 제외' },
+  { value: 'both', label: '마감 + 모집완료 제외' },
+]
+
+function FilterSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: T
+  onChange: (v: T) => void
+  options: { value: T; label: string }[]
+}) {
+  return (
+    <div className="relative flex-1">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="w-full appearance-none rounded-[4px] border border-[var(--border-card)] bg-white px-[12px] py-[9px] pr-[28px] text-[13px] font-medium text-[var(--heading)] focus:outline-none"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-[10px] top-1/2 -translate-y-1/2 text-[9px] text-[var(--border)]">
+        ▼
+      </span>
+    </div>
+  )
+}
 
 function normalize(s: string) {
   return s.trim().toLowerCase().replace(/\s+/g, '')
@@ -46,8 +105,9 @@ export default function FundingList() {
   const [dateFilter, setDateFilter] = useState<DateFilter>('all')
   const [radiusFilter, setRadiusFilter] = useState<RadiusFilter>('all')
   const [freeOnly, setFreeOnly] = useState(false)
-  const [hideExpired, setHideExpired] = useState(true)
-  const [hideMatched, setHideMatched] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('expired')
+  const hideExpired = statusFilter === 'expired' || statusFilter === 'both'
+  const hideMatched = statusFilter === 'matched' || statusFilter === 'both'
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -172,142 +232,47 @@ export default function FundingList() {
             )}
           </div>
 
-          <div className="-mx-[17px] overflow-x-auto px-[17px]">
-            <div className="flex w-max gap-[8px] pb-[2px]">
-              {CATEGORIES.map((c) => {
-                const active = category === c
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCategory(c)}
-                    className={`rounded-full px-[14px] py-[8px] text-[13px] ${
-                      active
-                        ? 'bg-[var(--primary-deep)] font-bold text-white'
-                        : 'bg-[var(--hairline)] font-medium text-[var(--label)]'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="relative">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as CategoryFilter)}
+              className="w-full appearance-none rounded-[4px] border border-[var(--border-card)] bg-white px-[14px] py-[11px] pr-[36px] text-[14px] font-medium text-[var(--heading)] focus:outline-none"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c === '전체' ? '전체 카테고리' : c}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-[14px] top-1/2 -translate-y-1/2 text-[10px] text-[var(--border)]">
+              ▼
+            </span>
           </div>
 
           {/* 날짜 · 요금 */}
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">날짜</span>
-            {(
-              [
-                { key: 'all' as const, label: '전체' },
-                { key: 'today' as const, label: '오늘' },
-                { key: 'week' as const, label: '이번 주' },
-              ] as const
-            ).map((d) => (
-              <button
-                key={d.key}
-                type="button"
-                onClick={() => setDateFilter(d.key)}
-                className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
-                  dateFilter === d.key
-                    ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                    : 'border-[var(--border-card)] text-[var(--label)]'
-                }`}
-              >
-                {d.label}
-              </button>
-            ))}
-            <span className="mx-[2px] h-[14px] w-px shrink-0 bg-[var(--hairline)]" />
+          <div className="flex items-center gap-[8px]">
+            <FilterSelect label="날짜" value={dateFilter} onChange={setDateFilter} options={DATE_OPTIONS} />
             <button
               type="button"
               onClick={() => setFreeOnly((v) => !v)}
-              className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
+              className={`shrink-0 rounded-[4px] border px-[12px] py-[9px] text-[13px] ${
                 freeOnly
                   ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                  : 'border-[var(--border-card)] text-[var(--label)]'
+                  : 'border-[var(--border-card)] font-medium text-[var(--label)]'
               }`}
             >
               무료만
             </button>
           </div>
 
-          {/* 거리 */}
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">거리</span>
-            {(
-              [
-                { key: 'all' as const, label: '전체' },
-                { key: '1' as const, label: '1km' },
-                { key: '3' as const, label: '3km' },
-              ] as const
-            ).map((r) => (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => setRadiusFilter(r.key)}
-                className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
-                  radiusFilter === r.key
-                    ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                    : 'border-[var(--border-card)] text-[var(--label)]'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          {/* 정렬 */}
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">정렬</span>
-            {(
-              [
-                { key: 'latest' as const, label: '최신' },
-                { key: 'almost' as const, label: '성사임박' },
-                { key: 'nearby' as const, label: '가까운순' },
-                { key: 'popular' as const, label: '인기' },
-              ] as const
-            ).map((s) => (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setSort(s.key)}
-                className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
-                  sort === s.key
-                    ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                    : 'border-[var(--border-card)] text-[var(--label)]'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
+          {/* 거리 · 정렬 */}
+          <div className="flex items-center gap-[8px]">
+            <FilterSelect label="거리" value={radiusFilter} onChange={setRadiusFilter} options={RADIUS_OPTIONS} />
+            <FilterSelect label="정렬" value={sort} onChange={setSort} options={SORT_OPTIONS} />
           </div>
 
           {/* 상태 */}
-          <div className="flex flex-wrap items-center gap-[8px]">
-            <span className="shrink-0 text-[11px] font-bold text-[var(--border)]">상태</span>
-            <button
-              type="button"
-              onClick={() => setHideExpired((v) => !v)}
-              className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
-                hideExpired
-                  ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                  : 'border-[var(--border-card)] text-[var(--label)]'
-              }`}
-            >
-              마감 제외
-            </button>
-            <button
-              type="button"
-              onClick={() => setHideMatched((v) => !v)}
-              className={`rounded-[4px] border px-[10px] py-[6px] text-[12px] ${
-                hideMatched
-                  ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
-                  : 'border-[var(--border-card)] text-[var(--label)]'
-              }`}
-            >
-              모집완료 제외
-            </button>
-          </div>
+          <FilterSelect label="상태" value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} />
 
           <div className="flex items-baseline justify-between">
             <p className="text-[21px] font-bold text-[var(--heading)]">

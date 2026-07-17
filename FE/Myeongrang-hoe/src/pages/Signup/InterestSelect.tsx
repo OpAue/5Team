@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { patchDraft } from '../../store/signupDraft'
+import { FUNDING_CATEGORIES } from '../../store/schema'
 
-const interests = ['맛집', '카페', '운동', '전시', '공연', '쇼핑']
+const interests = FUNDING_CATEGORIES
 
 export default function InterestSelect() {
   const navigate = useNavigate()

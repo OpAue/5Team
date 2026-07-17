@@ -105,6 +105,9 @@ export interface DB {
   nextReviewId: number
 }
 
+/** 펀딩 카테고리이자 사용자 관심사 태그 — 두 목록이 어긋나면 "내 관심사" 매칭이 깨지므로 하나로 공유한다 */
+export const FUNDING_CATEGORIES = ['맛집', '교류', '산책', '스터디', '스포츠', '봉사', '쇼핑'] as const
+
 export const CAMPUS_CENTER = { lat: 37.5805, lng: 126.9227 }
 
 /** 성사 임박 넛지를 "주변 사용자"로 판단하는 반경 (km) */

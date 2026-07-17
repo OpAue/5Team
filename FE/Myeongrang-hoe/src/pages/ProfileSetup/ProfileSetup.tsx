@@ -5,7 +5,7 @@ import avatarUploadBtn from '../../assets/profilesetup/avatar-upload-btn.svg'
 import { getCurrentUser, updateProfile } from '../../store/actions'
 import { showToast } from '../../store/ui'
 import { patchDraft } from '../../store/signupDraft'
-import type { Campus } from '../../store/schema'
+import { FUNDING_CATEGORIES, type Campus } from '../../store/schema'
 import { getAccessToken, uploadImageApi } from '../../lib/api'
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024
@@ -21,7 +21,12 @@ export default function ProfileSetup({ mode = 'signup' }: { mode?: 'signup' | 'e
   const [age, setAge] = useState(editingUser?.age ?? '')
   const [bio, setBio] = useState(editingUser?.bio ?? '')
   const [avatarImage, setAvatarImage] = useState(editingUser?.avatarImage ?? '')
+  const [interests, setInterests] = useState<string[]>(editingUser?.interests ?? [])
   const [saving, setSaving] = useState(false)
+
+  function toggleInterest(tag: string) {
+    setInterests((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+  }
 
   async function handlePickImage(file: File | null) {
     if (!file) return
@@ -75,6 +80,7 @@ export default function ProfileSetup({ mode = 'signup' }: { mode?: 'signup' | 'e
         age,
         bio,
         avatarImage: avatarImage || '',
+        interests,
       })
       showToast('프로필을 저장했어요', 'success')
       setSaving(false)
@@ -209,6 +215,36 @@ export default function ProfileSetup({ mode = 'signup' }: { mode?: 'signup' | 'e
         placeholder="다른 학생들에게 나를 소개해보세요"
         className="h-[88px] w-full resize-none rounded-[4px] border border-[var(--hairline)] p-[11px] text-[14px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
       />
+
+      {mode === 'edit' && (
+        <>
+          <div className="h-[24px]" />
+          <p className="text-[14px] font-bold text-[var(--heading)]">관심사</p>
+          <p className="text-[12px] text-[var(--label)]">
+            선택한 관심사에 맞는 펀딩과 알림을 보여드려요
+          </p>
+          <div className="h-[8px]" />
+          <div className="flex flex-wrap gap-[8px]">
+            {FUNDING_CATEGORIES.map((tag) => {
+              const active = interests.includes(tag)
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleInterest(tag)}
+                  className={`rounded-full border px-[14px] py-[9px] text-[13px] ${
+                    active
+                      ? 'border-[var(--primary-deep)] bg-[var(--primary-tint)] font-bold text-[var(--primary-deep)]'
+                      : 'border-[var(--border-card)] bg-white font-medium text-[var(--label)]'
+                  }`}
+                >
+                  {tag}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
 
       <div className="h-[32px]" />
 
