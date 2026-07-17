@@ -29,6 +29,7 @@ import {
   resolveSavedLocation,
   type LocationSource,
 } from '../../lib/userLocation'
+import { recommendWithMyeongBot } from '../../lib/myeongBot'
 import { formatKakaoError, relayoutMap, useKakao } from '../../lib/kakao'
 import { filterBlockedFundingHost } from '../../store/moderation'
 import { pushableNotifications, wishlistAlmostFullItems } from '../../store/notifications'
@@ -40,6 +41,8 @@ import type { FundingRecord } from '../../store/schema'
 const MAP_HEIGHT = 343
 
 type RadiusMode = '1' | '3' | 'all'
+/** 홈 상단 맞춤 영역: 관심사 카드 vs 명랑봇 추천 */
+type HomePickMode = 'interest' | 'bot'
 
 const RADIUS_OPTIONS: { key: RadiusMode; label: string; km: number }[] = [
   { key: '1', label: '1km', km: 1 },
@@ -61,6 +64,7 @@ export default function Home() {
   const [radiusMode, setRadiusMode] = useState<RadiusMode>('3')
   const [tourPlaying, setTourPlaying] = useState(false)
   const [interestPage, setInterestPage] = useState(0)
+  const [pickMode, setPickMode] = useState<HomePickMode>('interest')
   const toastedWishlist = useRef(new Set<string>())
   const tourTimer = useRef<number | null>(null)
   const tourIndex = useRef(0)
@@ -160,6 +164,12 @@ export default function Home() {
       .filter((f) => me.interests.includes(f.category) && !isExpired(f) && !isClosed(f))
       .slice(0, 12)
   }, [db.fundings, me?.interests])
+
+  // 명랑봇: 거리·관심사·성사임박·신뢰도·(있으면)이전 참여 이력
+  const botPicks = useMemo(() => {
+    if (!me) return []
+    return recommendWithMyeongBot(me, filterBlockedFundingHost(db.fundings), center, 6)
+  }, [me, db.fundings, center.lat, center.lng])
 
   const INTEREST_PAGE_SIZE = 2
   const interestPages = useMemo(() => {
@@ -456,12 +466,44 @@ export default function Home() {
             )}
           </div>
 
-          {/* 관심사 맞춤 페이지형 카드 */}
+          {/* 내 관심사 ↔ 명랑봇 토글 영역 */}
           {me && (
-            <div className="flex flex-col gap-[8px]">
-              <div className="flex items-center justify-between">
-                <p className="text-[16px] font-bold text-[var(--heading)]">내 관심사</p>
-                {interestPages.length > 1 && (
+            <div className="flex flex-col gap-[10px]">
+              <div className="flex items-center justify-between gap-[8px]">
+                <div
+                  className="flex flex-1 rounded-full bg-[var(--hairline)] p-[3px]"
+                  role="tablist"
+                  aria-label="홈 맞춤 추천 전환"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={pickMode === 'interest'}
+                    onClick={() => setPickMode('interest')}
+                    className={`flex-1 rounded-full py-[8px] text-[13px] font-bold transition-colors ${
+                      pickMode === 'interest'
+                        ? 'bg-white text-[var(--heading)] shadow-sm'
+                        : 'text-[var(--label)]'
+                    }`}
+                  >
+                    내 관심사
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={pickMode === 'bot'}
+                    onClick={() => setPickMode('bot')}
+                    className={`flex flex-1 items-center justify-center gap-[5px] rounded-full py-[8px] text-[13px] font-bold transition-colors ${
+                      pickMode === 'bot'
+                        ? 'bg-white text-[var(--heading)] shadow-sm'
+                        : 'text-[var(--label)]'
+                    }`}
+                  >
+                    <AiBrandMark className="h-[14px] w-auto object-contain" alt="" />
+                    명랑봇
+                  </button>
+                </div>
+                {pickMode === 'interest' && interestPages.length > 1 && (
                   <div className="flex items-center gap-[6px]">
                     <button
                       type="button"
@@ -485,67 +527,138 @@ export default function Home() {
                 )}
               </div>
 
-              {!me.interests?.length ? (
-                <Link
-                  to="/profile-setup/edit"
-                  className="rounded-[8px] border border-dashed border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] font-medium text-[var(--label)]"
-                >
-                  관심사를 등록해주세요
-                </Link>
-              ) : interestPages.length === 0 ? (
-                <p className="rounded-[8px] border border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] text-[var(--border)]">
-                  관심사에 맞는 글이 없어요
-                </p>
-              ) : (
+              {pickMode === 'interest' ? (
                 <>
-                  <div
-                    className="-mx-[17px] overflow-hidden px-[17px]"
-                    onTouchStart={handleInterestTouchStart}
-                    onTouchEnd={handleInterestTouchEnd}
-                  >
-                    <div
-                      className="flex transition-transform duration-300 ease-out"
-                      style={{ transform: `translateX(-${interestPageIndex * 100}%)` }}
+                  {!me.interests?.length ? (
+                    <Link
+                      to="/profile-setup/edit"
+                      className="rounded-[8px] border border-dashed border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] font-medium text-[var(--label)]"
                     >
-                      {interestPages.map((page, pageIdx) => (
-                        <div key={pageIdx} className="flex w-full shrink-0 gap-[10px] pb-[4px]">
-                          {page.map((g) => {
-                            const current = currentCountOf(g)
-                            return (
-                              <Link
-                                key={g.id}
-                                to={`/funding/${g.id}`}
-                                className="w-[calc((100%-10px)/2)] shrink-0 rounded-[8px] border border-[var(--border-card)] bg-white p-[12px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]"
-                              >
-                                <span className="text-[11px] font-bold text-[var(--primary-deep)]">
-                                  {g.category}
-                                </span>
-                                <p className="mt-[4px] line-clamp-2 text-[14px] font-bold text-[var(--heading)]">
-                                  {g.title}
-                                </p>
-                                <p className="mt-[6px] truncate text-[11px] text-[var(--label)]">
-                                  {g.locationName} · {current}/{g.targetCount}명
-                                </p>
-                              </Link>
-                            )
-                          })}
+                      관심사를 등록해주세요
+                    </Link>
+                  ) : interestPages.length === 0 ? (
+                    <p className="rounded-[8px] border border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] text-[var(--border)]">
+                      관심사에 맞는 글이 없어요
+                    </p>
+                  ) : (
+                    <>
+                      <div
+                        className="-mx-[17px] overflow-hidden px-[17px]"
+                        onTouchStart={handleInterestTouchStart}
+                        onTouchEnd={handleInterestTouchEnd}
+                      >
+                        <div
+                          className="flex transition-transform duration-300 ease-out"
+                          style={{ transform: `translateX(-${interestPageIndex * 100}%)` }}
+                        >
+                          {interestPages.map((page, pageIdx) => (
+                            <div key={pageIdx} className="flex w-full shrink-0 gap-[10px] pb-[4px]">
+                              {page.map((g) => {
+                                const current = currentCountOf(g)
+                                return (
+                                  <Link
+                                    key={g.id}
+                                    to={`/funding/${g.id}`}
+                                    className="w-[calc((100%-10px)/2)] shrink-0 rounded-[8px] border border-[var(--border-card)] bg-white p-[12px] shadow-[0px_2px_8px_rgba(0,0,0,0.06)]"
+                                  >
+                                    <span className="text-[11px] font-bold text-[var(--primary-deep)]">
+                                      {g.category}
+                                    </span>
+                                    <p className="mt-[4px] line-clamp-2 text-[14px] font-bold text-[var(--heading)]">
+                                      {g.title}
+                                    </p>
+                                    <p className="mt-[6px] truncate text-[11px] text-[var(--label)]">
+                                      {g.locationName} · {current}/{g.targetCount}명
+                                    </p>
+                                  </Link>
+                                )
+                              })}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                  {interestPages.length > 1 && (
-                    <div className="flex items-center justify-center gap-[5px]">
-                      {interestPages.map((page, i) => (
-                        <span
-                          key={page[0]?.id ?? i}
-                          className={`size-[5px] rounded-full transition-colors ${
-                            i === interestPageIndex ? 'bg-[var(--primary-deep)]' : 'bg-[var(--hairline)]'
-                          }`}
-                        />
-                      ))}
-                    </div>
+                      </div>
+                      {interestPages.length > 1 && (
+                        <div className="flex items-center justify-center gap-[5px]">
+                          {interestPages.map((page, i) => (
+                            <span
+                              key={page[0]?.id ?? i}
+                              className={`size-[5px] rounded-full transition-colors ${
+                                i === interestPageIndex
+                                  ? 'bg-[var(--primary-deep)]'
+                                  : 'bg-[var(--hairline)]'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
+              ) : (
+                <div className="flex flex-col gap-[10px]">
+                  <div className="flex items-start gap-[10px] rounded-[10px] bg-gradient-to-br from-[#ebf4ff] via-[#e8f6ec] to-[#f7f3e8] px-[14px] py-[12px]">
+                    <AiBrandMark className="mt-[2px] h-[22px] w-auto shrink-0 object-contain" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[14px] font-bold text-[var(--heading)]">
+                        지금 나가기 좋은 모임
+                      </p>
+                      <p className="mt-[2px] text-[12px] leading-snug text-[var(--label)]">
+                        거리·관심사·성사 임박·신뢰도
+                        {me.participationCount > 0 || (me.interests?.length ?? 0) > 0
+                          ? '·이전 참여'
+                          : ''}
+                        를 보고 골라봤어요
+                      </p>
+                    </div>
+                  </div>
+
+                  {botPicks.length === 0 ? (
+                    <p className="rounded-[8px] border border-[var(--border-card)] px-[16px] py-[18px] text-center text-[13px] text-[var(--border)]">
+                      지금은 추천할 모임이 없어요. 잠시 뒤 다시 확인해 주세요.
+                    </p>
+                  ) : (
+                    botPicks.map((pick, idx) => {
+                      const g = pick.funding
+                      const current = currentCountOf(g)
+                      return (
+                        <Link
+                          key={g.id}
+                          to={`/funding/${g.id}`}
+                          className="flex flex-col gap-[8px] rounded-[10px] border border-[var(--border-card)] bg-white p-[14px] shadow-[0px_2px_10px_rgba(0,0,0,0.06)]"
+                        >
+                          <div className="flex items-center justify-between gap-[8px]">
+                            <div className="flex items-center gap-[6px]">
+                              <span className="flex size-[20px] items-center justify-center rounded-full bg-[var(--primary-tint)] text-[11px] font-bold text-[var(--primary-deep)]">
+                                {idx + 1}
+                              </span>
+                              <span className="rounded-full bg-[var(--hairline)] px-[8px] py-[2px] text-[11px] font-bold text-[var(--label)]">
+                                {g.category}
+                              </span>
+                            </div>
+                            <span className="shrink-0 text-[11px] font-medium text-[var(--border)]">
+                              {pick.distanceKm < 1
+                                ? `${Math.round(pick.distanceKm * 1000)}m`
+                                : `${pick.distanceKm.toFixed(1)}km`}
+                            </span>
+                          </div>
+                          <p className="line-clamp-2 text-[15px] font-bold text-[var(--heading)]">
+                            {g.title}
+                          </p>
+                          <p className="truncate text-[12px] text-[var(--label)]">
+                            {g.locationName} · {current}/{g.targetCount}명
+                            {g.meetTimeText ? ` · ${g.meetTimeText}` : ''}
+                          </p>
+                          <div className="flex items-start gap-[6px] rounded-[6px] bg-[var(--blue-tint)] px-[10px] py-[8px]">
+                            <AiBrandMark className="mt-[1px] h-[14px] w-auto shrink-0 object-contain" alt="" />
+                            <p className="min-w-0 flex-1 text-[12px] font-medium leading-snug text-[var(--blue-deep)]">
+                              {pick.reasonLine}
+                            </p>
+                          </div>
+                        </Link>
+                      )
+                    })
+                  )}
+                </div>
               )}
             </div>
           )}
