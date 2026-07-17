@@ -86,6 +86,12 @@ public class RiskAnalysisService {
         String title = safe(funding.getTitle()).isBlank() ? "이 모임" : funding.getTitle().trim();
         String category = safe(funding.getCategory()).isBlank() ? "모임" : funding.getCategory().trim();
 
+        if (funding.isClosed()) {
+            return "호스트가 모집을 마감한 펀딩이에요.";
+        }
+        if (funding.isMatched()) {
+            return "목표 인원이 모두 모였어요. 채팅방에서 시간과 장소를 확정해보세요!";
+        }
         if (remain == 0) {
             return "목표 인원이 모두 모였어요. 채팅방에서 시간과 장소를 확정해보세요!";
         }

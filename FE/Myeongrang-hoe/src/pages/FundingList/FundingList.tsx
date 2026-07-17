@@ -342,7 +342,7 @@ export default function FundingList() {
                 participantNames: participantNamesOf(g),
                 participantEmails: g.participants,
                 foot:
-                  g.targetCount - current === 1
+                  !isMatched(g) && !isClosed(g) && g.targetCount - current === 1
                     ? `${current}/${g.targetCount}명 · 목표 달성 임박`
                     : `${current}/${g.targetCount}명 참여${g.fee === 0 ? ' · 무료' : ''}`,
                 best: g.best,

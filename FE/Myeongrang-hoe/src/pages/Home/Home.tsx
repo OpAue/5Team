@@ -15,6 +15,7 @@ import {
   getUser,
   isClosed,
   isExpired,
+  isMatched,
   participantNamesOf,
   syncFundingsFromServer,
   syncMeFromServer,
@@ -211,7 +212,9 @@ export default function Home() {
     tourTimer.current = window.setInterval(step, 2200)
   }
 
-  const almostThere = nearbyFundings.find((f) => f.targetCount - currentCountOf(f) === 1)
+  const almostThere = nearbyFundings.find(
+    (f) => !isMatched(f) && !isClosed(f) && f.targetCount - currentCountOf(f) === 1,
+  )
 
   // 성사 임박 문구는 서버(RiskAnalysisService)가 생성한 걸 우선 쓴다
   useEffect(() => {
@@ -486,7 +489,7 @@ export default function Home() {
                   participantNames: participantNamesOf(g),
                   participantEmails: g.participants,
                   foot:
-                    g.targetCount - current === 1
+                    !isMatched(g) && !isClosed(g) && g.targetCount - current === 1
                       ? `${current}/${g.targetCount}명 · 목표 달성 임박`
                       : `${current}/${g.targetCount}명 참여`,
                   best: g.best,
