@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import BottomNav from '../../components/BottomNav'
 import GigCard from '../../components/GigCard'
 import PageHeader from '../../components/PageHeader'
-import sunlightIcon from '../../assets/mypage/sunlight-icon.svg'
 import UserAvatar from '../../components/UserAvatar'
+import SunlightBadge from '../../components/SunlightBadge'
 import reviewerAvatar from '../../assets/mypage/reviewer-avatar.svg'
 import { useDB } from '../../store/db'
 import {
@@ -108,7 +108,7 @@ export default function MyPage() {
           </div>
 
           <div className="flex w-full items-center gap-[15px] p-[4px]">
-            <img src={sunlightIcon} alt="" className="size-[60px] shrink-0" />
+            <SunlightBadge score={me.sunlightScore} size={60} />
             <div className="flex min-w-0 flex-1 flex-col gap-[6px]">
               <div className="flex items-center gap-[9px]">
                 <p className="text-[15px] font-bold text-[var(--heading)]">햇살지수</p>

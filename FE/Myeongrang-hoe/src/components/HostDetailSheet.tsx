@@ -1,6 +1,6 @@
 import BackButton from './BackButton'
 import hostAvatar from '../assets/hostdetail/host-avatar.svg'
-import sunlightIcon from '../assets/hostdetail/sunlight-icon.svg'
+import SunlightBadge from './SunlightBadge'
 import reviewerAvatar from '../assets/hostdetail/reviewer-avatar.svg'
 import { useDB } from '../store/db'
 import { getCurrentUser, getFunding, getUser, reviewsReceivedBy } from '../store/actions'
@@ -80,7 +80,7 @@ export default function HostDetailSheet({
         )}
 
         <div className="flex shrink-0 items-center gap-[14px] px-[16px]">
-          <img src={sunlightIcon} alt="" className="size-[48px] shrink-0" />
+          <SunlightBadge score={host.sunlightScore} size={48} />
           <div className="flex min-w-0 flex-1 flex-col gap-[6px]">
             <div className="flex items-center gap-[8px]">
               <p className="text-[14px] font-bold text-[var(--heading)]">햇살지수</p>
