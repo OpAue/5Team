@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 
@@ -40,6 +41,16 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "success", false,
                 "message", ex.getMessage() != null ? ex.getMessage() : "로그인이 필요해요."
+        ));
+    }
+
+    // 백엔드 루트(/)나 favicon처럼 없는 정적 리소스 요청은 서버 오류가 아니므로
+    // 스택트레이스 없이 404로만 응답한다 (배포 로그 오염 방지)
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                "success", false,
+                "message", "요청한 경로를 찾을 수 없어요."
         ));
     }
 
