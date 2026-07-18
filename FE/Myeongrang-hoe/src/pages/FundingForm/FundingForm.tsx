@@ -134,7 +134,9 @@ export default function FundingForm() {
   const [time, setTime] = useState(existing ? isoToTimeInput(existing.meetAt) : '')
   const [headcount, setHeadcount] = useState(existing?.targetCount ?? 4)
   const [deadline, setDeadline] = useState(existing ? isoToDatetimeLocalInput(existing.deadlineAt) : '')
-  const [fee, setFee] = useState(existing?.fee ?? 0)
+  // 참가비는 자유 숫자 입력 필드 — 입력 중 빈 값을 허용하기 위해 문자열로 들고 있는다
+  const [feeText, setFeeText] = useState(existing?.fee ? String(existing.fee) : '')
+  const fee = Number(feeText) || 0
   const [coverImage, setCoverImage] = useState(existing?.coverImage ?? '')
 
   const minHeadcount = existing ? Math.max(2, existing.participants.length) : 2
@@ -415,11 +417,12 @@ export default function FundingForm() {
         <p className="mt-[20px] text-[14px] font-bold text-[var(--heading)]">참가비</p>
         <div className="mt-[8px] flex items-center gap-[8px]">
           <input
-            type="number"
-            min={0}
-            step={500}
-            value={fee}
-            onChange={(e) => setFee(Math.max(0, Number(e.target.value) || 0))}
+            type="text"
+            inputMode="numeric"
+            value={feeText}
+            onChange={(e) =>
+              setFeeText(e.target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7))
+            }
             placeholder="0"
             className="w-full border-b border-[var(--hairline)] py-[10px] text-[15px] text-[var(--heading)] placeholder:text-[var(--border)] focus:outline-none"
           />
